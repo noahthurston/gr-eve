@@ -1,0 +1,12 @@
+BPSK_classified,QPSK_classified,8PSK_classified,16QAM_classified,total_classified
+BPSK_sim:,9999,1,0,0,10000
+QPSK_sim:,0,9736,92,172,10000
+8PSK_sim:,0,1,9999,0,10000
+16QAM_sim:,0,1567,464,7969,10000
+
+BPSK_classified,QPSK_classified,8PSK_classified,16QAM_classified,total_classified
+BPSK_sim:,0.9999,0.0001,0.0,0.0,1
+QPSK_sim:,0.0,0.9736,0.0092,0.0172,1
+8PSK_sim:,0.0,0.0001,0.9999,0.0,1
+16QAM_sim:,0.0,0.1567,0.0464,0.7969,1
+
