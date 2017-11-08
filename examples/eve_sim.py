@@ -192,7 +192,7 @@ def run_sims(top_block_cls=eve_sim, options=None):
     signal_len = 1024;
     samp_rate = 100000;
     samples_to_check = 100;
-    samples = 100;
+    samples = 10000;
 
     #how to run for only a couple seconds or get only a limited number of samples?
 
