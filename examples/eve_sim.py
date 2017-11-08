@@ -192,61 +192,91 @@ def run_sims(top_block_cls=eve_sim, options=None):
     signal_len = 1024;
     samp_rate = 100000;
     samples_to_check = 100;
-    samples = 10000;
+    samples = 100;
 
     #how to run for only a couple seconds or get only a limited number of samples?
 
-    #2d lists to hold sim results (copies for results as nominal counts and percents)
-    sim_results = [[0 for col in range(5)] for row in range(4)]
-    sim_results_percent = [[0 for col in range(5)] for row in range(4)]
 
+    all_snr_results = []
+    all_snr_results_percent = []
 
     #sims is a list of topblocks
-    sims = [];
+    sims = []
     curr_message = ''
 
-    #iterate through the 4 possible modulations
-    for mod_index in range(4):
-        sims.append(top_block_cls(snr_db_ae, signal_len, samp_rate, samples, mod_index))
-        sims[mod_index].start()
-        sims[mod_index].wait()
-        sims[mod_index].stop()
-        print mod_index
-        print 'Number of messages received:',sims[mod_index].blocks_message_debug_0.num_messages()
-        
-        #tally recieved symbols and how they were classified
-        for curr_samp in range(samples):
-            curr_message = pmt.symbol_to_string(pmt.cdr(sims[mod_index].blocks_message_debug_0.get_message(curr_samp)))
-            sim_results[mod_index][mod[curr_message]] +=1
-            sim_results[mod_index][4] +=1
-
-    #print output of the sim 
-    print 'BPSK:',sim_results[mod['BPSK']]
-    print 'QPSK:',sim_results[mod['QPSK']]
-    print '8PSK:',sim_results[mod['8PSK']]
-    print '16QAM:',sim_results[mod['16QAM']]
-
-    #calculate the confusion matrix on a percent basis
-    for curr_row in range(4):
-        for curr_col in range(4):
-            sim_results_percent[curr_row][curr_col] = float(sim_results[curr_row][curr_col]) / float(sim_results[curr_row][4])
-        sim_results_percent[curr_row][4] = 1
-
-
-
-
-    #write results to a file as a csv
     output_file = open("confusion_matrix.csv", 'w')
-    write_csv(sim_results, output_file)
-    write_csv(sim_results_percent, output_file)
+    output_file_forplot = open("confusion_matrix_forplot.csv", 'w')
+
+    snr_db_ae_range = range(-10,10,1)
+
+
+    for snr_db_ae in snr_db_ae_range:
+
+
+	    #2d lists to hold sim results (copies for results as nominal counts and percents)
+	    sim_results = [[0 for col in range(5)] for row in range(4)]
+	    sim_results_percent = [[0 for col in range(5)] for row in range(4)]
+	    sims = [];
+
+	    #iterate through the 4 possible modulations
+	    for mod_index in range(4):
+	        sims.append(top_block_cls(snr_db_ae, signal_len, samp_rate, samples, mod_index))
+	        sims[mod_index].start()
+	        sims[mod_index].wait()
+	        sims[mod_index].stop()
+	        #print mod_index
+	        #print 'Number of messages received:',sims[mod_index].blocks_message_debug_0.num_messages()
+	        
+	        #tally recieved symbols and how they were classified
+	        for curr_samp in range(samples):
+	            curr_message = pmt.symbol_to_string(pmt.cdr(sims[mod_index].blocks_message_debug_0.get_message(curr_samp)))
+	            sim_results[mod_index][mod[curr_message]] +=1
+	            sim_results[mod_index][4] +=1
+
+	    #print output of the sim 
+	    print 'SNR:',snr_db_ae
+	    print 'BPSK:',sim_results[mod['BPSK']]
+	    print 'QPSK:',sim_results[mod['QPSK']]
+	    print '8PSK:',sim_results[mod['8PSK']]
+	    print '16QAM:',sim_results[mod['16QAM']]
+
+	    #calculate the confusion matrix on a percent basis
+	    for curr_row in range(4):
+	        for curr_col in range(4):
+	            sim_results_percent[curr_row][curr_col] = float(sim_results[curr_row][curr_col]) / float(sim_results[curr_row][4])
+	        sim_results_percent[curr_row][4] = 1
+
+
+	    all_snr_results.append(sim_results)
+	    all_snr_results_percent.append(sim_results_percent)
+
+
+	    #write results to a file as a csv
+	    #output_file = open("confusion_matrix.csv", 'w')
+	    
+	    write_csv(sim_results, output_file)
+	    write_csv(sim_results_percent, output_file)
+	    
+	    #output_file.close()
+
+
+	    print '\n'
+
+    write_csv_forplot(all_snr_results_percent, snr_db_ae_range, samples, output_file_forplot)
+
     output_file.close()
+    output_file_forplot.close()
+
+    #debug output
+    for i in range (20):
+    	print all_snr_results_percent[i][0][0],'\t',all_snr_results_percent[i][1][1],'\t',all_snr_results_percent[i][2][2],'\t',all_snr_results_percent[i][3][3]
 
 
 
 
 def write_csv(sim_results, output_file):
     
-    csv_column_labels = ["BPSK_classified",'QPSK_classified','8PSK_classified','16QAM_classified','total_classified']
+    csv_column_labels = ['sim','BPSK_classified','QPSK_classified','8PSK_classified','16QAM_classified','total_classified']
 
     csv_writer = csv.writer(output_file)
     csv_writer.writerow(csv_column_labels)
@@ -257,6 +287,33 @@ def write_csv(sim_results, output_file):
     csv_writer.writerow(["16QAM_sim:"] + sim_results[3])
 
     output_file.write('\n')
+
+
+def write_csv_forplot(all_sim_results, snr_db_ae_range, num_samples, output_file):
+    
+    csv_column_labels = [
+    'SNR',
+    'BPSK_of_BPSK','QPSK_of_BPSK','8PSK_of_BPSK','16QAM_of_BPSK',
+    'BPSK_of_QPSK','QPSK_of_QPSK','8PSK_of_QPSK','16QAM_of_QPSK',
+    'BPSK_of_8PSK','QPSK_of_8PSK','8PSK_of_8PSK','16QAM_of_8PSK',
+    'BPSK_of_16QAM','QPSK_of_16QAM','8PSK_of_16QAM','16QAM_of_16QAM',
+    'total_classified'
+    ]
+
+    csv_writer = csv.writer(output_file)
+    csv_writer.writerow(csv_column_labels)
+
+
+    for curr_snr in range(len(all_sim_results)):
+    	#initialize row to be empty
+    	curr_row = [snr_db_ae_range[curr_snr]]
+
+    	for mod_sim in range(len(all_sim_results[curr_snr])):
+    		curr_row = curr_row + all_sim_results[curr_snr][mod_sim][:4]
+
+    	curr_row = curr_row + [num_samples]
+
+    	csv_writer.writerow(curr_row)
 
 
 
