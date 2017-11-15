@@ -7,7 +7,7 @@
 # Generated: Sun Oct 29 09:50:29 2017
 #
 # Script to run simulation trials of eve_sim_flowgraph
-# current script in gr-eve_mod/examples
+# Current script in gr-eve_mod/examples
 ##################################################
 
 
@@ -44,9 +44,6 @@ class eve_sim(gr.top_block):
 
     def __init__(self, snr_db_ae = 15, signal_len = 1024, samp_rate = 100000, samples = 1000, const_index = 3):
         gr.top_block.__init__(self, "Eve Sim")
-
-
-
 
         ##################################################
         # Variables
@@ -187,14 +184,12 @@ def run_sims(top_block_cls=eve_sim, options=None):
     #dictionary of modulations and indexes
     mod  = {'BPSK':0, 'QPSK':1, '8PSK':2, '16QAM':3}
 
-    #paramters when running a sim, could be organized into a class for a sim
+    #parameters when running a sim, could be organized into a class for a sim
     snr_db_ae = 10;
     signal_len = 1024;
     samp_rate = 100000;
     samples_to_check = 100;
     samples = 10000;
-
-    #how to run for only a couple seconds or get only a limited number of samples?
 
 
     all_snr_results = []
@@ -224,8 +219,6 @@ def run_sims(top_block_cls=eve_sim, options=None):
 	        sims[mod_index].start()
 	        sims[mod_index].wait()
 	        sims[mod_index].stop()
-	        #print mod_index
-	        #print 'Number of messages received:',sims[mod_index].blocks_message_debug_0.num_messages()
 	        
 	        #tally recieved symbols and how they were classified
 	        for curr_samp in range(samples):
@@ -252,13 +245,8 @@ def run_sims(top_block_cls=eve_sim, options=None):
 
 
 	    #write results to a file as a csv
-	    #output_file = open("confusion_matrix.csv", 'w')
-	    
 	    write_csv(sim_results, output_file)
 	    write_csv(sim_results_percent, output_file)
-	    
-	    #output_file.close()
-
 
 	    print '\n'
 
@@ -268,8 +256,8 @@ def run_sims(top_block_cls=eve_sim, options=None):
     output_file_forplot.close()
 
     #debug output
-    for i in range (20):
-    	print all_snr_results_percent[i][0][0],'\t',all_snr_results_percent[i][1][1],'\t',all_snr_results_percent[i][2][2],'\t',all_snr_results_percent[i][3][3]
+    #for i in range (20):
+    #	print all_snr_results_percent[i][0][0],'\t',all_snr_results_percent[i][1][1],'\t',all_snr_results_percent[i][2][2],'\t',all_snr_results_percent[i][3][3]
 
 
 
@@ -289,6 +277,7 @@ def write_csv(sim_results, output_file):
     output_file.write('\n')
 
 
+#combines smaller matrices for each snr sim into one large matrix and saves it as a csv
 def write_csv_forplot(all_sim_results, snr_db_ae_range, num_samples, output_file):
     
     csv_column_labels = [
@@ -305,7 +294,7 @@ def write_csv_forplot(all_sim_results, snr_db_ae_range, num_samples, output_file
 
 
     for curr_snr in range(len(all_sim_results)):
-    	#initialize row to be empty
+    	
     	curr_row = [snr_db_ae_range[curr_snr]]
 
     	for mod_sim in range(len(all_sim_results[curr_snr])):
