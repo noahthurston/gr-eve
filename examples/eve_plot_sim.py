@@ -80,9 +80,9 @@ class Plot_Datarate_vs_SNR:
 		plt.title(figure_title, fontsize=18)
 		plt.xlabel('SNR')
 		plt.ylabel('Data Throughput')
-		plt.ylim(1.5,2.5,0.25)
+		plt.ylim(0,2.5)
 		plt.grid(True)
-		plt.savefig(file_name + '.png', format='png', dpi=300)
+		plt.savefig(file_name + '_y_axis_0.0-2.5.png', format='png', dpi=300)
 
 
 		"""
