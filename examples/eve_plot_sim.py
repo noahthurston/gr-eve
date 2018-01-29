@@ -17,8 +17,12 @@ class Plot_Datarate_vs_SNR:
 		self.data_throughput = []
 
 		self.load_data_from_csv()
-		self.calculate_data_throughput()
-		self.plot_data()
+
+		self.crunch_plot_datathroughput_when_targeted()
+
+		#self.calculate_data_throughput()
+		#self.plot_data()
+
 
 	def load_data_from_csv(self):
 		#load saved sim data from csv
@@ -55,6 +59,7 @@ class Plot_Datarate_vs_SNR:
 		#plot loaded sim data from csv
 		print "plotting data"
 
+		
 		for mod_graph in range(1,5,1):
 			x_vals = []
 			y_vals = []
@@ -71,6 +76,72 @@ class Plot_Datarate_vs_SNR:
 		self.save_figure(2, 'QPSK Data Throughput vs SNR', 'QPSK')
 		self.save_figure(3, '8PSK Data Throughput vs SNR', 'eightPSK')
 		self.save_figure(4, '16QAM Data Throughput vs SNR', 'sixteenQAM')
+		
+
+	def crunch_plot_datathroughput_when_targeted(self):
+		print "crunching and plotting the data throughput vs SNR when using only a single modulation and all 16QAM is jammed"
+		
+		#16QAM Jammed
+		x_vals = []
+		y_vals_BPSK = []
+		y_vals_QPSK = []
+		y_vals_eightPSK = []
+		y_vals_sixteenQAM = []
+
+		for snr_row in range(1,len(self.csv_data),1):
+			x_vals.append(float(self.csv_data[snr_row][0]))
+			y_vals_BPSK.append(1*(1-float(self.csv_data[snr_row][0*4 + 4])))
+			y_vals_QPSK.append(2*(1-float(self.csv_data[snr_row][1*4 + 4])))
+			y_vals_eightPSK.append(3*(1-float(self.csv_data[snr_row][2*4 + 4])))
+			y_vals_sixteenQAM.append(4*(1-float(self.csv_data[snr_row][3*4 + 4])))
+
+		plt.figure(1)
+		plt.plot(x_vals, y_vals_BPSK, label='BPSK', marker='o')
+		plt.plot(x_vals, y_vals_QPSK, label='QPSK', marker='o')
+		plt.plot(x_vals, y_vals_eightPSK, label='8SPK', marker='o')
+		plt.plot(x_vals, y_vals_sixteenQAM, label='16QAM', marker='o')
+
+		plt.title("Data Throughput by Modulation with 16QAM Jammed", fontsize=18)
+		plt.xlabel('SNR of Eve')
+		plt.ylabel('AB Data Throughput')
+		plt.ylim(0,4)
+		plt.grid(True)
+		plt.legend(loc='lower left')
+
+		#plt.show()
+
+
+		#16QAM and 8PSK Jammed
+		x_vals = []
+		y_vals_BPSK = []
+		y_vals_QPSK = []
+		y_vals_eightPSK = []
+		y_vals_sixteenQAM = []
+
+		for snr_row in range(1,len(self.csv_data),1):
+			x_vals.append(float(self.csv_data[snr_row][0]))
+			y_vals_BPSK.append(1*(1-float(self.csv_data[snr_row][0*4 + 4])- float(self.csv_data[snr_row][0*4 + 3])))
+			y_vals_QPSK.append(2*(1-float(self.csv_data[snr_row][1*4 + 4])- float(self.csv_data[snr_row][1*4 + 3])))
+			y_vals_eightPSK.append(3*(1-float(self.csv_data[snr_row][2*4 + 4])- float(self.csv_data[snr_row][2*4 + 3])))
+			y_vals_sixteenQAM.append(4*(1-float(self.csv_data[snr_row][3*4 + 4])- float(self.csv_data[snr_row][3*4 + 3])))
+
+		plt.figure(2)
+		plt.plot(x_vals, y_vals_BPSK, label='BPSK', marker='o')
+		plt.plot(x_vals, y_vals_QPSK, label='QPSK', marker='o')
+		plt.plot(x_vals, y_vals_eightPSK, label='8SPK', marker='o')
+		plt.plot(x_vals, y_vals_sixteenQAM, label='16QAM', marker='o')
+
+		plt.title("Data Throughput by Modulation with 16QAM and 8PSK Jammed", fontsize=18)
+		plt.xlabel('SNR of Eve')
+		plt.ylabel('AB Data Throughput')
+		plt.ylim(0,4)
+		plt.grid(True)
+		plt.legend(loc='lower left')
+
+		plt.show()
+
+
+
 
 
 
@@ -80,7 +151,7 @@ class Plot_Datarate_vs_SNR:
 		plt.title(figure_title, fontsize=18)
 		plt.xlabel('SNR')
 		plt.ylabel('Data Throughput')
-		plt.ylim(0,2.5)
+		plt.ylim(0.0,2.5)
 		plt.grid(True)
 		plt.savefig(file_name + '_y_axis_0.0-2.5.png', format='png', dpi=300)
 

@@ -189,7 +189,7 @@ def run_sims(top_block_cls=eve_sim, options=None):
     signal_len = 1024;
     samp_rate = 100000;
     samples_to_check = 100;
-    samples = 10000;
+    samples = 20000;
 
 
     all_snr_results = []
@@ -202,7 +202,7 @@ def run_sims(top_block_cls=eve_sim, options=None):
     output_file = open("confusion_matrix.csv", 'w')
     output_file_forplot = open("confusion_matrix_forplot.csv", 'w')
 
-    snr_db_ae_range = range(-10,10,1)
+    snr_db_ae_range = np.arange(-10,10,0.5)
 
 
     for snr_db_ae in snr_db_ae_range:
