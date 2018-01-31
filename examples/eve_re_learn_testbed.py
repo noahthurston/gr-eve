@@ -32,6 +32,7 @@ from gnuradio import qtgui
 import bitarray
 import tables
 from tables import *
+import matplotlib.pyplot as plt
 
 class eve_re_learn_testbed_graph(gr.top_block, Qt.QWidget):
 
@@ -63,7 +64,7 @@ class eve_re_learn_testbed_graph(gr.top_block, Qt.QWidget):
         # Variables
         ##################################################
         self.snr_db = snr_db = 0
-        self.samp_rate = samp_rate = 32000
+        self.samp_rate = samp_rate = 1000000
         self.max_items = max_items = 100
 
         self.eve_noise_db = eve_noise_db
@@ -163,13 +164,16 @@ def main(top_block_cls=eve_re_learn_testbed_graph, options=None):
 
 
 
-
 #h5 table for keeping data for reinforcement learning
 class LearningTable(IsDescription):
     packet_time_ID = Int64Col()
     eve_noise_db = Float64Col() #this is the action that must be picked by the model
     reward = Float64Col()
-    #modulation_detected = StringCol(16) #max 16 chars
+    
+    #eve_noise_db = bob snr
+
+    #modulation is the state for now
+    modulation_detected = StringCol(16) #max 16 chars
     #power_detected = Float64Col()
 
 
@@ -191,19 +195,17 @@ class eve_learning_model():
         self.current_time = 0
         ### add any other model parameters
 
-
     # main function, iterates through trials 
     def train_model(self, num_trials):
         print("beginning training")
 
         # loop through trainning trialss
         for trial in range(num_trials):
+            print("\nrunning trial #%d" %trial)
             self.run_trial() 
-
 
     # function instantiates top block and runs single step
     def run_trial(self):
-        print("running trial")
 
         #picks action to be taken during this packet
         eve_noise_db = self.pick_action()
@@ -229,33 +231,28 @@ class eve_learning_model():
         new_row['reward'] = reward
         new_row.append()
 
-
     # given what alice sent and bob received, it scores Eve's decision
     def calculate_reward(self, eve_noise_db, alice_sent, bob_rec):
-        print("calculating_reward")
 
         ### need some reinforcement learning code here to calculate appropriate reward for actions
         ### will need to know actions it took and results
         reward = 0
+        print("reward: %d" %reward)
         return(reward)
-
-
 
     # given the current state and inputs, it calculates the action to be taken
     def pick_action(self):
-        print("picking action")
 
         ### need some reinforcement learning code here to decide the next action
         ### will need access to the table of past actions and current state 
         eve_noise_db = 0
+        print("picking action, eve_noise_db: %d" % eve_noise_db)
         return(eve_noise_db)
-
-
 
 
     #### these functions may not be needed
 
-    # data handler for storing a single section of a packet
+    # data handler for storing a single 8-bit section of a packet
     def eightbit_data_handler(self, alice_sent, bob_rec, table):
         # put data into group.table
         myRow = table.row
@@ -295,9 +292,6 @@ class eve_learning_model():
 
 
 
-
-
-
 if __name__ == '__main__':
 
     #boiler plate QT GUI code
@@ -306,8 +300,7 @@ if __name__ == '__main__':
         style = gr.prefs().get_string('qtgui', 'style', 'raster')
         Qt.QApplication.setGraphicsSystem(style)
     qapp = Qt.QApplication(sys.argv)
-
-
+    
 
     h5file = open_file("./test/learning_model_table.h5", mode="w", title="Test Table Title`")
     group = h5file.create_group("/", 'sim_group', 'Group information')
@@ -333,7 +326,6 @@ def test_h5_table(top_block_cls=eve_re_learn_testbed_graph, options=None):
         style = gr.prefs().get_string('qtgui', 'style', 'raster')
         Qt.QApplication.setGraphicsSystem(style)
     qapp = Qt.QApplication(sys.argv)
-
 
     # create block
     # run block to max
@@ -365,23 +357,23 @@ def test_h5_table(top_block_cls=eve_re_learn_testbed_graph, options=None):
     for i in range(len(all_IDs)):
         print("ID:% d\tAlice Sent: %d\t\tBob Rec: %d" % (all_IDs[i], all_alice_sent[i], all_bob_rec[i]))
 
+    h5file.close()
 
-def test_vector_sink(top_block_cls=eve_re_learn_testbed_graph, options=None):
+def test_bits_flipped_vs_noise(top_block_cls=eve_re_learn_testbed_graph, options=None):
     from distutils.version import StrictVersion
     if StrictVersion(Qt.qVersion()) >= StrictVersion("4.5.0"):
         style = gr.prefs().get_string('qtgui', 'style', 'raster')
         Qt.QApplication.setGraphicsSystem(style)
     qapp = Qt.QApplication(sys.argv)
 
-    # db = 0
+    db_list = range(-20,21)
+    avg_bits_flipped_list = []
 
-    for test_db in range(-5,-4):
+    for test_db in db_list:
 
         tb = top_block_cls(test_db,test_db)
         tb.start()
         tb.wait()
-
-        # print("\n\n")
 
         # grab data from sink
         alice_sent = tb.blocks_vector_sink_alice.data()
@@ -414,14 +406,19 @@ def test_vector_sink(top_block_cls=eve_re_learn_testbed_graph, options=None):
             # print("%s\t%d bits flipped" % (bin(int(row[1])),num_bits_flipped))
             # print("-----------")
 
-
         avg_bits_flipped = sum(bits_flipped_list)/float(len(bits_flipped_list))
+        avg_bits_flipped_list.append(avg_bits_flipped)
         print("%d db, avg bits flipped: %f" % (test_db, avg_bits_flipped))
-
-
 
     # def int_to_binlist(num_int, num_bin_digits):
     # def count_bits_flipped(bin_list1, bin_list2):
+
+    plt.plot(db_list, avg_bits_flipped_list, 'r-')
+    plt.title("Bits Flipped vs Eve and Channel Noise", fontsize=18)
+    plt.xlabel('Eve and Channel Noise (db)')
+    plt.ylabel('Bits Flipped')
+    plt.grid(True)
+    plt.savefig('./plots/bits-flipped_vs_channel-noise_large.png', format='png', dpi=300)
 
     tb.show()
 
@@ -430,3 +427,22 @@ def test_vector_sink(top_block_cls=eve_re_learn_testbed_graph, options=None):
         tb.wait()
     qapp.connect(qapp, Qt.SIGNAL("aboutToQuit()"), quitting)
     qapp.exec_()
+
+# function to convert an integer to a list of binary numbers
+def int_to_binlist(num_int, num_bin_digits):
+    tmp_num = num_int
+    num_in_bin = np.zeros(num_bin_digits)
+    for index in range(len(num_in_bin)):
+        if tmp_num >= 2**(len(num_in_bin)-1-index):
+            tmp_num = tmp_num - (2**(len(num_in_bin)-1-index))
+            num_in_bin[index] = 1
+    # print(num_in_bin)
+    return num_in_bin
+
+# counts number of bits flipped
+def count_bits_flipped(bin_list1, bin_list2):
+    num_bits_flipped = 0
+    for index in range(len(bin_list1)):
+        if bin_list1[index] != bin_list2[index]:
+            num_bits_flipped += 1
+    return num_bits_flipped

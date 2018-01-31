@@ -2,13 +2,22 @@ import numpy as np
 import tables
 from tables import *
 from bitarray import bitarray
+import matplotlib.pyplot as plt
+
+
+db_list = range(-5,6)
+avg_bits_flipped_list = db_list
+
+plt.plot(db_list, avg_bits_flipped_list, 'r-')
+plt.title("Bits Flipped vs Eve Noise", fontsize=18)
+plt.xlabel('Eve Noise (db)')
+plt.ylabel('Bits Flipped')
+plt.grid(True)
+plt.savefig('./plots/bits-flipped_vs_eve-noise.png', format='png', dpi=300)
 
 
 
-
-
-
-
+"""
 
 class LearningTable(IsDescription):
 	ID = Int64Col()
@@ -21,7 +30,6 @@ group = h5file.create_group("/", 'myGroup', 'Group information')
 table = h5file.create_table(group, 'tableNodeName', LearningTable, "The Best Table Title")
 
 myRow = table.row
-
 for i in range(10):
 	myRow['ID'] = i*100
 	myRow['numRec'] = i+1
@@ -39,7 +47,7 @@ table = h5file.root.myGroup.tableNodeName
 
 all_IDs = [x['ID'] for x in table.iterrows()]
 print(all_IDs)
-
+"""
 
 
 ### h5ls -rd test_table.h5
