@@ -88,8 +88,8 @@ class eve_re_learn_testbed_graph(gr.top_block, Qt.QWidget):
         self.blocks_head_0 = blocks.head(gr.sizeof_char*1, max_items)
         self.blocks_add_xx_0 = blocks.add_vcc(1)
         self.analog_random_source_x_0 = blocks.vector_source_b(map(int, np.random.randint(0, 2, 1000000)), True)
-        self.analog_fastnoise_source_x_0_0 = analog.fastnoise_source_c(analog.GR_GAUSSIAN, 10**(-self.eve_noise_db/20.0), 0, 2**16)
-        self.analog_fastnoise_source_x_0 = analog.fastnoise_source_c(analog.GR_GAUSSIAN, 10**(-self.channel_noise_db/20.0), 0, 2**16)
+        self.analog_fastnoise_source_x_0_0 = analog.fastnoise_source_c(analog.GR_GAUSSIAN, 10**(self.eve_noise_db/20.0), 0, 2**16)
+        self.analog_fastnoise_source_x_0 = analog.fastnoise_source_c(analog.GR_GAUSSIAN, 10**(self.channel_noise_db/20.0), 0, 2**16)
 
         ##################################################
         # Connections
@@ -189,6 +189,11 @@ class PacketTable(IsDescription):
 #created separate class so that the reinforcement learning table could be accessed easily anywhere within the function
 class eve_learning_model():
     def __init__(self, reinforcement_learning_table, max_items=100):
+        #epsilon-Greedy parameters
+        #self.epsilon = epsilon
+        #self.arms = arms #list of values for 
+
+
         self.max_items = max_items
         self.reinforcement_learning_table = reinforcement_learning_table
         self.current_channel_noise_db = 0
@@ -288,7 +293,97 @@ class eve_learning_model():
 
 
 
+##################################################################################################################
 
+def test_bits_flipped_vs_noise(top_block_cls=eve_re_learn_testbed_graph, options=None):
+    from distutils.version import StrictVersion
+    if StrictVersion(Qt.qVersion()) >= StrictVersion("4.5.0"):
+        style = gr.prefs().get_string('qtgui', 'style', 'raster')
+        Qt.QApplication.setGraphicsSystem(style)
+    qapp = Qt.QApplication(sys.argv)
+
+    db_list = range(-20,21)
+    avg_bits_flipped_list = []
+
+    for test_db in db_list:
+
+        tb = top_block_cls(test_db, -100)
+        tb.start()
+        tb.wait()
+
+        # grab data from sink
+        alice_sent = tb.blocks_vector_sink_alice.data()
+        bob_rec = tb.blocks_vector_sink_bob.data()
+
+        # create np array to hold sent and rec data
+        data_sent_n_rec = np.zeros((tb.max_items,2))
+        #print(data_sent_n_rec)
+
+        for index, val in enumerate(alice_sent):
+            data_sent_n_rec[index][0] = val
+
+        for index, val in enumerate(bob_rec):
+            data_sent_n_rec[index][1] = val
+
+        #print(data_sent_n_rec)
+        #print("\n\n")
+
+        bits_flipped_list = []
+
+        for row in data_sent_n_rec:
+            alice_sent_bin_list = int_to_binlist(int(row[0]), 8)
+            bob_rec_bin_list = int_to_binlist(int(row[1]), 8)
+            num_bits_flipped = count_bits_flipped(alice_sent_bin_list, bob_rec_bin_list)
+
+            bits_flipped_list.append(num_bits_flipped)
+
+            # print(bin(int(row[0])))
+            # print("%s" % (bin(int(row[0]))))
+            # print("%s\t%d bits flipped" % (bin(int(row[1])),num_bits_flipped))
+            # print("-----------")
+
+        avg_bits_flipped = sum(bits_flipped_list)/float(len(bits_flipped_list))
+        avg_bits_flipped_list.append(avg_bits_flipped)
+        print("%d db, avg bits flipped: %f" % (test_db, avg_bits_flipped))
+
+    # def int_to_binlist(num_int, num_bin_digits):
+    # def count_bits_flipped(bin_list1, bin_list2):
+
+    plt.plot(db_list, avg_bits_flipped_list, 'r-')
+    plt.title("Bits Flipped vs Eve's Generated Noise (db)", fontsize=18)
+    plt.xlabel("Eve's Generated Noise (db)")
+    plt.ylabel('Bits Flipped')
+    plt.grid(True)
+    plt.savefig('./plots/bits-flipped_vs_eve-noise_large_1.png', format='png', dpi=300)
+
+    tb.show()
+
+
+    def quitting():
+        tb.stop()
+        tb.wait()
+    qapp.connect(qapp, Qt.SIGNAL("aboutToQuit()"), quitting)
+    qapp.exec_()
+
+# function to convert an integer to a list of binary numbers
+def int_to_binlist(num_int, num_bin_digits):
+    tmp_num = num_int
+    num_in_bin = np.zeros(num_bin_digits)
+    for index in range(len(num_in_bin)):
+        if tmp_num >= 2**(len(num_in_bin)-1-index):
+            tmp_num = tmp_num - (2**(len(num_in_bin)-1-index))
+            num_in_bin[index] = 1
+    # print(num_in_bin)
+    return num_in_bin
+
+# counts number of bits flipped
+def count_bits_flipped(bin_list1, bin_list2):
+    num_bits_flipped = 0
+    for index in range(len(bin_list1)):
+        if bin_list1[index] != bin_list2[index]:
+            num_bits_flipped += 1
+    return num_bits_flipped
+###################################################################################################################
 
 
 
@@ -301,7 +396,7 @@ if __name__ == '__main__':
         Qt.QApplication.setGraphicsSystem(style)
     qapp = Qt.QApplication(sys.argv)
     
-
+    """
     h5file = open_file("./test/learning_model_table.h5", mode="w", title="Test Table Title`")
     group = h5file.create_group("/", 'sim_group', 'Group information')
     table = h5file.create_table(group, 'test_nodename', LearningTable, "The Best Table Title")
@@ -310,7 +405,9 @@ if __name__ == '__main__':
     model.train_model(3)
 
     h5file.close()
+    """
 
+    test_bits_flipped_vs_noise()
 
 
 
@@ -418,7 +515,7 @@ def test_bits_flipped_vs_noise(top_block_cls=eve_re_learn_testbed_graph, options
     plt.xlabel('Eve and Channel Noise (db)')
     plt.ylabel('Bits Flipped')
     plt.grid(True)
-    plt.savefig('./plots/bits-flipped_vs_channel-noise_large.png', format='png', dpi=300)
+    plt.savefig('./plots/bits-flipped_vs_channel-noise_large_1.png', format='png', dpi=300)
 
     tb.show()
 
@@ -446,3 +543,7 @@ def count_bits_flipped(bin_list1, bin_list2):
         if bin_list1[index] != bin_list2[index]:
             num_bits_flipped += 1
     return num_bits_flipped
+
+
+
+#run test with channel noise being -100 (basically nothing), so it actually is eve channel noise, not bob SNR
