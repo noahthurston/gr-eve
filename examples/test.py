@@ -5,6 +5,30 @@ from bitarray import bitarray
 import matplotlib.pyplot as plt
 
 
+melist = [[0 for x in range(4)] for y in range(10)]
+print(melist)
+"""
+
+# counts number of bits flipped
+def count_bits_flipped(sent_data, rec_data):
+    num_bits_flipped = 0
+    for i in range(len(sent_data)):
+        for j in range(len(sent_data[i])):
+            if(sent_data[i][j] != rec_data[i][j]):
+                num_bits_flipped = num_bits_flipped+1
+    return num_bits_flipped
+
+
+sent_test = [[1,1],[1,0],[1,0]]
+rec_test = [[0,1],[1,0],[1,0]]
+
+flipped = count_bits_flipped(sent_test, rec_test)
+print(flipped)
+"""
+
+
+"""
+
 db_list = range(-5,6)
 avg_bits_flipped_list = db_list
 
@@ -15,7 +39,7 @@ plt.ylabel('Bits Flipped')
 plt.grid(True)
 plt.savefig('./plots/bits-flipped_vs_eve-noise.png', format='png', dpi=300)
 
-
+"""
 
 """
 

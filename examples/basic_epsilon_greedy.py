@@ -14,8 +14,9 @@ class epsilon_greedy_model():
 		self.average_rewards = [0.0 for x in range(num_arms)]
 
 	def find_max_index(self, list_x):
-		m = max(list_x)
-		return list_x.index(m)
+		#m = max(list_x)
+		#return list_x.index(m)
+		return list_x.index(max(list_x))
 
 	def select_arm(self):
 		if random.random() > self.epsilon:

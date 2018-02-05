@@ -33,10 +33,11 @@ import bitarray
 import tables
 from tables import *
 import matplotlib.pyplot as plt
+import random
 
 class eve_re_learn_testbed_graph(gr.top_block, Qt.QWidget):
 
-    def __init__(self, eve_noise_db=1, channel_noise_db=1, max_items=100):
+    def __init__(self, eve_noise_db=1, channel_noise_db=1, max_items=8):
         gr.top_block.__init__(self, "Eve Re Learn Testbed Graph")
         Qt.QWidget.__init__(self)
         self.setWindowTitle("Eve Re Learn Testbed Graph")
@@ -65,7 +66,7 @@ class eve_re_learn_testbed_graph(gr.top_block, Qt.QWidget):
         ##################################################
         self.snr_db = snr_db = 0
         self.samp_rate = samp_rate = 1000000
-        self.max_items = max_items = 100
+        self.max_items = max_items
 
         self.eve_noise_db = eve_noise_db
         self.channel_noise_db = channel_noise_db
@@ -176,48 +177,59 @@ class LearningTable(IsDescription):
     modulation_detected = StringCol(16) #max 16 chars
     #power_detected = Float64Col()
 
-
-#table to hold data from a single packet, MAY NOT BE NEEDED
-class PacketTable(IsDescription):
-    time_ID = Int64Col()
-    alice_sent = Int8Col()
-    bob_rec = Int8Col()
-    calc_bits_flipped = Int8Col()
-
-
-
 #created separate class so that the reinforcement learning table could be accessed easily anywhere within the function
 class eve_learning_model():
-    def __init__(self, reinforcement_learning_table, max_items=100):
-        #epsilon-Greedy parameters
-        #self.epsilon = epsilon
-        #self.arms = arms #list of values for 
+    def __init__(self, epsilon, eve_noise_arms, arm_counts, average_rewards, bytes_per_packet):
+        self.epsilon = epsilon
+        self.eve_noise_arms = eve_noise_arms #list of possible eve noise transmitting strengths (db)
+        self.arm_counts = arm_counts #counts of how many times each arm has been taken
+        self.average_rewards = average_rewards
+        self.bytes_per_packet = bytes_per_packet 
 
-
-        self.max_items = max_items
-        self.reinforcement_learning_table = reinforcement_learning_table
-        self.current_channel_noise_db = 0
-        self.current_time = 0
-        ### add any other model parameters
+        #record of average rewards for debugging
+        self.historical_average_rewards = [[]]
+        self.historical_pickaction_choices = [[]]
 
     # main function, iterates through trials 
     def train_model(self, num_trials):
         print("beginning training")
+
+        self.historical_average_rewards = [[0 for x in range(len(self.eve_noise_arms))] for y in range(num_trials)]
+        self.historical_pickaction_choices = [[0 for x in range(len(self.eve_noise_arms))] for y in range(num_trials)]
 
         # loop through trainning trialss
         for trial in range(num_trials):
             print("\nrunning trial #%d" %trial)
             self.run_trial() 
 
+            print("current rewards: "+ str(self.average_rewards))
+            total_counts = float(sum(self.arm_counts))
+            print("current pickation frequency: "+ str([float(count)/total_counts for count in self.arm_counts]))
+            
+            # recording values for graphing average rewards over time
+            for index, avg in enumerate(self.average_rewards):
+                self.historical_average_rewards[trial][index] = avg
+
+            # recorddng values for graphing the percentage of each arm chosen over time
+            for index, count in enumerate(self.arm_counts):
+                self.historical_pickaction_choices[trial][index] = (float(count)/float(sum(self.arm_counts)))
+
+            #print(self.historical_average_rewards)
+
+        self.graph_averages_overtime()
+        #self.graph_pickaction_choices_overtime()
+
     # function instantiates top block and runs single step
     def run_trial(self):
 
         #picks action to be taken during this packet
-        eve_noise_db = self.pick_action()
+        chosen_arm = self.pick_arm()
+        chosen_eve_noise_db = self.eve_noise_arms[chosen_arm]
 
         #create topblock with parameters chosen by pick_action and run
         #__init__(self, eve_noise_db=1, channel_noise_db=1, max_items=100):
-        tb = eve_re_learn_testbed_graph(eve_noise_db=eve_noise_db, channel_noise_db=self.current_channel_noise_db, max_items=self.max_items)
+        print("bytes: %d" % self.bytes_per_packet)
+        tb = eve_re_learn_testbed_graph(eve_noise_db=chosen_eve_noise_db, channel_noise_db=-100, max_items=self.bytes_per_packet)
         tb.start()
         tb.wait()
 
@@ -226,55 +238,66 @@ class eve_learning_model():
         bob_rec = tb.blocks_vector_sink_bob.data() 
 
         #calculate reward based on results
-        reward = self.calculate_reward(eve_noise_db, alice_sent, bob_rec)
+        reward = self.calculate_reward(alice_sent, bob_rec)
 
-        #put results in table
-        new_row = self.reinforcement_learning_table.row
-        self.current_time = self.current_time+1
-        new_row['packet_time_ID'] = self.current_time
-        new_row['eve_noise_db'] = eve_noise_db
-        new_row['reward'] = reward
-        new_row.append()
+        self.update_model(chosen_arm, reward)
 
-    # given what alice sent and bob received, it scores Eve's decision
-    def calculate_reward(self, eve_noise_db, alice_sent, bob_rec):
 
-        ### need some reinforcement learning code here to calculate appropriate reward for actions
-        ### will need to know actions it took and results
-        reward = 0
-        print("reward: %d" %reward)
-        return(reward)
+
 
     # given the current state and inputs, it calculates the action to be taken
-    def pick_action(self):
+    def pick_arm(self):
+
+        if random.random() > self.epsilon:
+            chosen_arm = self.average_rewards.index(max(self.average_rewards))
+        else:
+            chosen_arm = random.randrange(len(self.eve_noise_arms))
+
+        print("chosen_arm:%d , eve noise db:%d" % (chosen_arm, self.eve_noise_arms[chosen_arm]))
+        return chosen_arm
 
         ### need some reinforcement learning code here to decide the next action
         ### will need access to the table of past actions and current state 
-        eve_noise_db = 0
-        print("picking action, eve_noise_db: %d" % eve_noise_db)
-        return(eve_noise_db)
+        #eve_noise_db = 0
+        #print("picking action, eve_noise_db: %d" % eve_noise_db)
+        #return(eve_noise_db)
+
+    # given what alice sent and bob received, it scores Eve's decision
+    def calculate_reward(self, alice_sent, bob_rec):
+        alice_sent_bin_lists = self.ints_to_list_of_binlists(alice_sent)
+        bob_rec_bin_lists = self.ints_to_list_of_binlists(bob_rec)
+        bits_flipped = self.count_bits_flipped(alice_sent_bin_lists, bob_rec_bin_lists)
+
+        ### need some reinforcement learning code here to calculate appropriate reward for actions
+        ### will need to know actions it took and results
+        reward = bits_flipped / self.bytes_per_packet
+        print("reward: %d" %reward)
+        return(reward)
+
+    ### needs works
+    def update_model(self, chosen_arm, reward):
+        self.arm_counts[chosen_arm] = self.arm_counts[chosen_arm]+1
+        n = float(self.arm_counts[chosen_arm])
+
+        print(average_rewards)
+
+        avg_reward = self.average_rewards[chosen_arm]
+        new_avg_reward = ((n-1)/n)*avg_reward + reward/n
+        self.average_rewards[chosen_arm] = new_avg_reward
 
 
-    #### these functions may not be needed
+    def ints_to_list_of_binlists(self, integer_list):
+        list_of_binlists = [[] for x in range(len(integer_list))]
+        for index, num in enumerate(integer_list):
+            num_in_bin = self.int_to_binlist(num, 8)
+            list_of_binlists[index] = num_in_bin
+        return(list_of_binlists)
 
-    # data handler for storing a single 8-bit section of a packet
-    def eightbit_data_handler(self, alice_sent, bob_rec, table):
-        # put data into group.table
-        myRow = table.row
-        for i in range(len(alice_sent)):
-            myRow['time_ID'] = i
-            myRow['alice_sent'] = alice_sent[i]
-            myRow['bob_rec'] = bob_rec[i]
-            myRow['calc_bits_flipped'] = -1
-            myRow.append()
-
-        #flushes table IO buffer
-        table.flush()    
 
     # function to convert an integer to a list of binary numbers
-    def int_to_binlist(self, num_int, num_bin_digits):
-        tmp_num = num_int
-        num_in_bin = np.zeros(num_bin_digits)
+    def int_to_binlist(self, number, num_bin_digits):
+        tmp_num = number
+        num_in_bin = [0 for x in range(num_bin_digits)]
         for index in range(len(num_in_bin)):
             if tmp_num >= 2**(len(num_in_bin)-1-index):
                 tmp_num = tmp_num - (2**(len(num_in_bin)-1-index))
@@ -283,107 +306,64 @@ class eve_learning_model():
         return num_in_bin
 
     # counts number of bits flipped
-    def count_bits_flipped(self, bin_list1, bin_list2):
+    def count_bits_flipped(self, sent_data, rec_data):
         num_bits_flipped = 0
-        for index in range(len(bin_list1)):
-            if bin_list1[index] != bin_list2[index]:
-                num_bits_flipped += 1
+        #print(sent_data)
+        #print(rec_data)
+
+        for i in range(len(sent_data)):
+            for j in range(len(sent_data[i])):
+                if(sent_data[i][j] != rec_data[i][j]):
+                    num_bits_flipped = num_bits_flipped+1
         return num_bits_flipped
 
+    def graph_averages_overtime(self):
+        averages_transposed = np.array(self.historical_average_rewards).T.tolist()
+        x_list = range(len(averages_transposed[0]))
+
+        plt.title("Average Rewards vs Trials Run", fontsize=18)
+        plt.xlabel('Trials Run')
+        plt.ylabel('Average Rewards (Bits Flipped per Byte)')
+        plt.grid(True)
+        #plt.savefig('./plots/avg-rewards_vs_trials.png', format='png', dpi=300)
+
+        color_codings = ["r-","y-","k-","b-","g-"]
+
+        for index, avgs in enumerate(averages_transposed):
+            plt.plot(x_list, avgs, color_codings[index], label=(str(self.eve_noise_arms[index])+ " dB"))
+
+        plt.legend(loc=2)
+
+        plt.savefig('./plots/avg-rewards_vs_trials.png', format='png', dpi=300)
+        #plt.show()
 
 
+    def graph_pickaction_choices_overtime(self):
+        pickaction_transposed = np.array(self.historical_pickaction_choices).T.tolist()
+        x_list = range(len(pickaction_transposed[0]))
 
-##################################################################################################################
+        #print(self.historical_pickaction_choices)
+        #print(pickaction_transposed)
 
-def test_bits_flipped_vs_noise(top_block_cls=eve_re_learn_testbed_graph, options=None):
-    from distutils.version import StrictVersion
-    if StrictVersion(Qt.qVersion()) >= StrictVersion("4.5.0"):
-        style = gr.prefs().get_string('qtgui', 'style', 'raster')
-        Qt.QApplication.setGraphicsSystem(style)
-    qapp = Qt.QApplication(sys.argv)
+        title_str = "Frequency of Each Arm Chosen vs Trials Run (epsilon=" + "{0:.2f}".format(self.epsilon) + ")"
+        plt.title(title_str, fontsize=18)
+        plt.xlabel('Trials Run')
+        plt.ylabel('Frequency Arm is Chosen')
+        plt.grid(True)
+        
+        #plt.savefig('./plots/avg-rewards_vs_trials.png', format='png', dpi=300)
 
-    db_list = range(-20,21)
-    avg_bits_flipped_list = []
+        color_codings = ["r-","y-","k-","b-","g-"]
 
-    for test_db in db_list:
+        for index, percentage in enumerate(pickaction_transposed):
+            plt.plot(x_list, percentage, color_codings[index], label=(str(self.eve_noise_arms[index])+ " dB"))
 
-        tb = top_block_cls(test_db, -100)
-        tb.start()
-        tb.wait()
+        plt.legend()
 
-        # grab data from sink
-        alice_sent = tb.blocks_vector_sink_alice.data()
-        bob_rec = tb.blocks_vector_sink_bob.data()
-
-        # create np array to hold sent and rec data
-        data_sent_n_rec = np.zeros((tb.max_items,2))
-        #print(data_sent_n_rec)
-
-        for index, val in enumerate(alice_sent):
-            data_sent_n_rec[index][0] = val
-
-        for index, val in enumerate(bob_rec):
-            data_sent_n_rec[index][1] = val
-
-        #print(data_sent_n_rec)
-        #print("\n\n")
-
-        bits_flipped_list = []
-
-        for row in data_sent_n_rec:
-            alice_sent_bin_list = int_to_binlist(int(row[0]), 8)
-            bob_rec_bin_list = int_to_binlist(int(row[1]), 8)
-            num_bits_flipped = count_bits_flipped(alice_sent_bin_list, bob_rec_bin_list)
-
-            bits_flipped_list.append(num_bits_flipped)
-
-            # print(bin(int(row[0])))
-            # print("%s" % (bin(int(row[0]))))
-            # print("%s\t%d bits flipped" % (bin(int(row[1])),num_bits_flipped))
-            # print("-----------")
-
-        avg_bits_flipped = sum(bits_flipped_list)/float(len(bits_flipped_list))
-        avg_bits_flipped_list.append(avg_bits_flipped)
-        print("%d db, avg bits flipped: %f" % (test_db, avg_bits_flipped))
-
-    # def int_to_binlist(num_int, num_bin_digits):
-    # def count_bits_flipped(bin_list1, bin_list2):
-
-    plt.plot(db_list, avg_bits_flipped_list, 'r-')
-    plt.title("Bits Flipped vs Eve's Generated Noise (db)", fontsize=18)
-    plt.xlabel("Eve's Generated Noise (db)")
-    plt.ylabel('Bits Flipped')
-    plt.grid(True)
-    plt.savefig('./plots/bits-flipped_vs_eve-noise_large_1.png', format='png', dpi=300)
-
-    tb.show()
+        plt.savefig('./plots/pickaction_vs_trials.png', format='png', dpi=300)
+        #plt.show()
 
 
-    def quitting():
-        tb.stop()
-        tb.wait()
-    qapp.connect(qapp, Qt.SIGNAL("aboutToQuit()"), quitting)
-    qapp.exec_()
-
-# function to convert an integer to a list of binary numbers
-def int_to_binlist(num_int, num_bin_digits):
-    tmp_num = num_int
-    num_in_bin = np.zeros(num_bin_digits)
-    for index in range(len(num_in_bin)):
-        if tmp_num >= 2**(len(num_in_bin)-1-index):
-            tmp_num = tmp_num - (2**(len(num_in_bin)-1-index))
-            num_in_bin[index] = 1
-    # print(num_in_bin)
-    return num_in_bin
-
-# counts number of bits flipped
-def count_bits_flipped(bin_list1, bin_list2):
-    num_bits_flipped = 0
-    for index in range(len(bin_list1)):
-        if bin_list1[index] != bin_list2[index]:
-            num_bits_flipped += 1
-    return num_bits_flipped
-###################################################################################################################
 
 
 
@@ -395,19 +375,24 @@ if __name__ == '__main__':
         style = gr.prefs().get_string('qtgui', 'style', 'raster')
         Qt.QApplication.setGraphicsSystem(style)
     qapp = Qt.QApplication(sys.argv)
-    
-    """
-    h5file = open_file("./test/learning_model_table.h5", mode="w", title="Test Table Title`")
-    group = h5file.create_group("/", 'sim_group', 'Group information')
-    table = h5file.create_table(group, 'test_nodename', LearningTable, "The Best Table Title")
-    
-    model = eve_learning_model(table)
-    model.train_model(3)
 
-    h5file.close()
-    """
+    #def __init__(self, epsilon, eve_noise_arms, arm_counts, bytes_per_packet):
 
-    test_bits_flipped_vs_noise()
+    eve_noise_arms = range(-10,11,5)
+    arm_counts = [0 for x in range(len(eve_noise_arms))]
+    average_rewards = [0 for x in range(len(eve_noise_arms))]
+    print("eve_noise_arms: " + str(eve_noise_arms))
+    print("arm_counts: " + str(arm_counts))
+    print("average_rewards: " + str(average_rewards))
+
+
+    model = eve_learning_model(0.75, eve_noise_arms, arm_counts, average_rewards, 8)
+    model.train_model(200)
+
+    #crude way of ending program
+    raise SystemExit
+
+
 
 
 
@@ -544,6 +529,3 @@ def count_bits_flipped(bin_list1, bin_list2):
             num_bits_flipped += 1
     return num_bits_flipped
 
-
-
-#run test with channel noise being -100 (basically nothing), so it actually is eve channel noise, not bob SNR
