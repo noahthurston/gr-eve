@@ -38,7 +38,7 @@
     </param>
     <param>
       <key>generate_options</key>
-      <value>qt_gui</value>
+      <value>no_gui</value>
     </param>
     <param>
       <key>hier_block_src_path</key>
@@ -46,7 +46,7 @@
     </param>
     <param>
       <key>id</key>
-      <value>eve_re_learn_testbed_graph</value>
+      <value>eve_re_learn_testbed_noqt</value>
     </param>
     <param>
       <key>max_nouts</key>
@@ -795,7 +795,7 @@
     </param>
     <param>
       <key>_coordinate</key>
-      <value>(960, 411)</value>
+      <value>(795, 374)</value>
     </param>
     <param>
       <key>_rotation</key>

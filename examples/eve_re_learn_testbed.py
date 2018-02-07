@@ -216,8 +216,8 @@ class eve_learning_model():
 
             #print(self.historical_average_rewards)
 
-        self.graph_averages_overtime()
-        #self.graph_pickaction_choices_overtime()
+        #self.graph_averages_overtime()
+        self.graph_pickaction_choices_overtime()
 
     # function instantiates top block and runs single step
     def run_trial(self):
@@ -358,7 +358,7 @@ class eve_learning_model():
         for index, percentage in enumerate(pickaction_transposed):
             plt.plot(x_list, percentage, color_codings[index], label=(str(self.eve_noise_arms[index])+ " dB"))
 
-        plt.legend()
+        plt.legend(loc=2)
 
         plt.savefig('./plots/pickaction_vs_trials.png', format='png', dpi=300)
         #plt.show()
@@ -386,7 +386,7 @@ if __name__ == '__main__':
     print("average_rewards: " + str(average_rewards))
 
 
-    model = eve_learning_model(0.75, eve_noise_arms, arm_counts, average_rewards, 8)
+    model = eve_learning_model(0.40, eve_noise_arms, arm_counts, average_rewards, 8)
     model.train_model(200)
 
     #crude way of ending program
