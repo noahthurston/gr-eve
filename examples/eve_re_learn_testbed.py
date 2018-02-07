@@ -6,6 +6,7 @@
 # Generated: Tue Jan 23 11:09:53 2018
 ##################################################
 
+"""
 if __name__ == '__main__':
     import ctypes
     import sys
@@ -17,6 +18,7 @@ if __name__ == '__main__':
             print "Warning: failed to XInitThreads()"
 
 from PyQt4 import Qt
+"""
 from gnuradio import analog
 from gnuradio import blocks
 from gnuradio import digital
@@ -35,10 +37,12 @@ from tables import *
 import matplotlib.pyplot as plt
 import random
 
-class eve_re_learn_testbed_graph(gr.top_block, Qt.QWidget):
+#class eve_re_learn_testbed_graph(gr.top_block, Qt.QWidget):
+class eve_re_learn_testbed_graph(gr.top_block):
 
     def __init__(self, eve_noise_db=1, channel_noise_db=1, max_items=8):
         gr.top_block.__init__(self, "Eve Re Learn Testbed Graph")
+        """
         Qt.QWidget.__init__(self)
         self.setWindowTitle("Eve Re Learn Testbed Graph")
         qtgui.util.check_set_qss()
@@ -60,12 +64,12 @@ class eve_re_learn_testbed_graph(gr.top_block, Qt.QWidget):
 
         self.settings = Qt.QSettings("GNU Radio", "eve_re_learn_testbed_graph")
         self.restoreGeometry(self.settings.value("geometry").toByteArray())
-
+        """
         ##################################################
         # Variables
         ##################################################
         self.snr_db = snr_db = 0
-        self.samp_rate = samp_rate = 1000000
+        self.samp_rate = samp_rate = 10000000
         self.max_items = max_items
 
         self.eve_noise_db = eve_noise_db
@@ -368,13 +372,14 @@ class eve_learning_model():
 
 
 if __name__ == '__main__':
-
+    """
     #boiler plate QT GUI code
     from distutils.version import StrictVersion
     if StrictVersion(Qt.qVersion()) >= StrictVersion("4.5.0"):
         style = gr.prefs().get_string('qtgui', 'style', 'raster')
         Qt.QApplication.setGraphicsSystem(style)
     qapp = Qt.QApplication(sys.argv)
+    """
 
     #def __init__(self, epsilon, eve_noise_arms, arm_counts, bytes_per_packet):
 
@@ -502,7 +507,7 @@ def test_bits_flipped_vs_noise(top_block_cls=eve_re_learn_testbed_graph, options
     plt.grid(True)
     plt.savefig('./plots/bits-flipped_vs_channel-noise_large_1.png', format='png', dpi=300)
 
-    tb.show()
+    #tb.show()
 
     def quitting():
         tb.stop()
