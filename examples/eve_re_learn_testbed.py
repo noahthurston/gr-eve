@@ -175,12 +175,17 @@ cons:
 
 #created separate class so that the reinforcement learning table could be accessed easily anywhere within the function
 class eve_learning_model():
-    def __init__(self, epsilon, eve_noise_patterns, arm_counts, average_rewards, bytes_per_packet):
+    def __init__(self, epsilon, eve_noise_patterns, arm_counts, average_rewards, bytes_per_packet, with_power_penalty, bits_flipped_threshold):
         self.epsilon = epsilon
-        self.eve_noise_patterns = eve_noise_patterns #list of jamming patterns
+        self.eve_noise_arms = eve_noise_arms #list of jamming patterns
         self.arm_counts = arm_counts #counts of how many times each arm has been taken
         self.average_rewards = average_rewards
         self.bytes_per_packet = bytes_per_packet 
+
+        self.with_power_penalty = with_power_penalty
+
+        #number of bits to flip in order to get a reward
+        self.bits_flipped_threshold = bits_flipped_threshold
 
         #record of average rewards for debugging
         self.historical_average_rewards = [[]]
@@ -212,7 +217,7 @@ class eve_learning_model():
 
             #print(self.historical_average_rewards)
 
-        #self.graph_averages_overtime()
+        self.graph_averages_overtime()
         self.graph_pickaction_choices_overtime()
 
     # function instantiates top block and runs single step
@@ -234,7 +239,7 @@ class eve_learning_model():
         bob_rec = tb.blocks_vector_sink_bob.data() 
 
         #calculate reward based on results
-        reward = self.calculate_reward(alice_sent, bob_rec)
+        reward = self.calculate_reward(alice_sent, bob_rec, chosen_arm)
 
         self.update_model(chosen_arm, reward)
 
@@ -259,14 +264,19 @@ class eve_learning_model():
         #return(eve_noise_db)
 
     # given what alice sent and bob received, it scores Eve's decision
-    def calculate_reward(self, alice_sent, bob_rec):
+    def calculate_reward(self, alice_sent, bob_rec, chosen_arm):
         alice_sent_bin_lists = self.ints_to_list_of_binlists(alice_sent)
         bob_rec_bin_lists = self.ints_to_list_of_binlists(bob_rec)
         bits_flipped = self.count_bits_flipped(alice_sent_bin_lists, bob_rec_bin_lists)
 
-        ### need some reinforcement learning code here to calculate appropriate reward for actions
-        ### will need to know actions it took and results
-        reward = bits_flipped / self.bytes_per_packet
+        if self.with_power_penalty == True:
+            if bits_flipped >= self.bits_flipped_threshold*self.bytes_per_packet:
+                reward = 5 - (self.eve_noise_arms[chosen_arm]+10)*0.1
+            else:
+                reward = 0
+        else:
+            reward = bits_flipped / self.bytes_per_packet
+
         print("reward: %d" %reward)
         return(reward)
 
@@ -332,7 +342,7 @@ class eve_learning_model():
 
         plt.legend(loc=2)
 
-        figure.savefig('./plots/avg-rewards_vs_trials.png', format='png', dpi=300)
+        figure.savefig('./plots/power_penalty/avg-rewards_vs_trials.png', format='png', dpi=300)
         #plt.show()
 
 
@@ -357,7 +367,7 @@ class eve_learning_model():
 
         plt.legend(loc=2)
 
-        figure.savefig('./plots/pickaction_vs_trials.png', format='png', dpi=300)
+        figure.savefig('./plots/power_penalty/pickaction_vs_trials.png', format='png', dpi=300)
         #plt.show()
 
 
@@ -373,6 +383,6 @@ if __name__ == '__main__':
     print("average_rewards: " + str(average_rewards))
 
 
-    model = eve_learning_model(0.40, eve_noise_arms, arm_counts, average_rewards, 8)
+    model = eve_learning_model(0.40, eve_noise_arms, arm_counts, average_rewards, 8, True, 2)
     model.train_model(200)
 
