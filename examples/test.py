@@ -1,12 +1,34 @@
 import numpy as np
+import random
 import tables
 from tables import *
 from bitarray import bitarray
 import matplotlib.pyplot as plt
 
 
-melist = [[0 for x in range(4)] for y in range(10)]
+arms = np.array([[1,2],[3,4],[5,6]])
+
+
+
+print(arms[1][0])
+
+
+raise SystemExit
+arm1 = arms[0]
+print(len(arm1))
+
+
+for i in range(10):
+	print(random.randint(0,2))
+
+
+melist = np.zeros((5,2))
 print(melist)
+
+
+
+
+
 """
 
 # counts number of bits flipped
