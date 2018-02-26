@@ -143,21 +143,6 @@ def main(top_block_cls=eve_re_learn_testbed_graph, options=None):
     qapp.exec_()
 
 
-
-
-#h5 table for keeping data for reinforcement learning
-class LearningTable(IsDescription):
-    packet_time_ID = Int64Col()
-    eve_noise_db = Float64Col() #this is the action that must be picked by the model
-    reward = Float64Col()
-    
-    #eve_noise_db = bob snr
-
-    #modulation is the state for now
-    modulation_detected = StringCol(16) #max 16 chars
-    #power_detected = Float64Col()
-
-
 """
 New idea
 -jam at random points
@@ -174,27 +159,67 @@ cons:
 """
 
 #created separate class so that the reinforcement learning table could be accessed easily anywhere within the function
-class eve_learning_model():
-    def __init__(self, epsilon, eve_noise_patterns, arm_counts, average_rewards, bytes_per_packet, with_power_penalty, bits_flipped_threshold):
+class monte_carlo_model():
+    def __init__(self, arms, arm_counts, arm_rewards, arm_values, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list):
+    #def __init__(self, epsilon, eve_noise_patterns, arm_counts, average_rewards, bytes_per_packet, with_power_penalty, bits_flipped_threshold):
+        
+        """
         self.epsilon = epsilon
         self.eve_noise_arms = eve_noise_arms #list of jamming patterns
         self.arm_counts = arm_counts #counts of how many times each arm has been taken
         self.average_rewards = average_rewards
         self.bytes_per_packet = bytes_per_packet 
-
         self.with_power_penalty = with_power_penalty
-
         #number of bits to flip in order to get a reward
         self.bits_flipped_threshold = bits_flipped_threshold
-
         #record of average rewards for debugging
         self.historical_average_rewards = [[]]
         self.historical_pickaction_choices = [[]]
+        """
+
+        #MONTE CARLO
+        self.arms = arms
+        self.arm_counts = arm_counts
+        self.arm_rewards = arm_rewards
+        self.arm_values = arm_values
+
+        self.curr_episode = 0
+        self.bytes_per_part = 1
+        self.parts_per_packet = len(arms)
+
+        #artificial rewards by timesteps that the algorithm is going to try to model
+        self.artificial_rewards = artificial_rewards
+        self.artificial_best_pattern = artificial_best_pattern
+        self.power_penalty_list = power_penalty_list
+
+        #current pattern and result used when running episodes
+        self.curr_pattern = np.zeros((len(arm_counts)))
+        self.curr_part = 0
+
+        #array of ints that were recieved sent/rec
+        self.total_alice_sent_int = np.array([])
+        self.total_bob_rec_int = np.array([])
+
+        #array of ints counting how many bits were flipped per byte
+        self.bits_flipped_by_byte = np.array([])
+
+
+        self.episode_reward = 0
+
+        self.average_reward_per_arm = np.zeros((len(self.arm_counts),len(self.arm_counts[0])))
+        self.best_pattern = np.zeros((len(self.arm_counts)),dtype=int)
+
+        self.pattern_mistakes_over_time = np.array([len(self.arm_counts)])
+
+        self.update_graph_data_increment = 10
+
+
 
     # main function, iterates through trials 
     def train_model(self, num_trials):
         print("beginning training")
 
+        """
         self.historical_average_rewards = [[0 for x in range(len(self.eve_noise_arms))] for y in range(num_trials)]
         self.historical_pickaction_choices = [[0 for x in range(len(self.eve_noise_arms))] for y in range(num_trials)]
 
@@ -219,36 +244,56 @@ class eve_learning_model():
 
         self.graph_averages_overtime()
         self.graph_pickaction_choices_overtime()
+        """
 
-    # function instantiates top block and runs single step
-    def run_trial(self):
+        #MONTE CARLO
+        #print(self.artificial_rewards)
 
-        #picks action to be taken during this packet
-        chosen_arm = self.pick_arm()
-        chosen_eve_noise_db = self.eve_noise_arms[chosen_arm]
+        while self.curr_episode < num_episodes:
+            print("EPISODE #" + str(self.curr_episode) + "-------------------------------------")
+            self.run_episode()
+            print("\n")
+            """
+            if(self.curr_episode % self.update_graph_data_increment == 0):
+                self.calculate_average_reward_per_arm()
+                print(self.average_reward_per_arm)
+                self.calculate_best_pattern()
+                self.update_graph_data()
+            """
 
-        #create topblock with parameters chosen by pick_action and run
-        #__init__(self, eve_noise_db=1, channel_noise_db=1, max_items=100):
-        print("bytes: %d" % self.bytes_per_packet)
-        tb = eve_re_learn_testbed_graph(eve_noise_db=chosen_eve_noise_db, channel_noise_db=-100, max_items=self.bytes_per_packet)
-        tb.start()
-        tb.wait()
+            self.curr_episode = self.curr_episode + 1
 
-        #fetch data
-        alice_sent = tb.blocks_vector_sink_alice.data()
-        bob_rec = tb.blocks_vector_sink_bob.data() 
+        #self.calculate_average_reward_per_arm()
+        
+        #print(self.average_reward_per_arm)
 
-        #calculate reward based on results
-        reward = self.calculate_reward(alice_sent, bob_rec, chosen_arm)
+        #self.calculate_best_pattern()
+        #print("END, best pattern: " + str(self.best_pattern))
 
-        self.update_model(chosen_arm, reward)
+        #self.graph_pattern_mistakes_over_time()
+
+        print("done training")
 
 
 
 
+    #runs through whole episode process
+    def run_episode(self):
+        self.curr_part = 0
+        self.generate_random_pattern()
+        self.run_through_model()
+        self.calculate_reward()
+        self.update_model()
+        self.calculate_best_pattern()
+
+        print("self.arm_values: \n" + str(self.arm_values))
+
+
+
+    """
+    # EG function
     # given the current state and inputs, it calculates the action to be taken
     def pick_arm(self):
-
         if random.random() > self.epsilon:
             chosen_arm = self.average_rewards.index(max(self.average_rewards))
         else:
@@ -256,72 +301,122 @@ class eve_learning_model():
 
         print("chosen_arm:%d , eve noise db:%d" % (chosen_arm, self.eve_noise_arms[chosen_arm]))
         return chosen_arm
+    """
 
-        ### need some reinforcement learning code here to decide the next action
-        ### will need access to the table of past actions and current state 
-        #eve_noise_db = 0
-        #print("picking action, eve_noise_db: %d" % eve_noise_db)
-        #return(eve_noise_db)
+
+    #generates random pattern
+    def generate_random_pattern(self):
+        for time, curr_arms in enumerate(self.arms):
+            self.curr_pattern[time] = random.randint(0,len(curr_arms)-1)
+
+
+
+    #using generated pattern, runs episode through the model
+    def run_through_model(self):
+        #right now this done nothing, but it will be used when sending signals through GNU radio
+        print("self.curr_pattern: " + str(self.curr_pattern))
+
+
+        self.total_alice_sent_int = np.array([])
+        self.total_bob_rec_int = np.array([])
+
+        for timestep, chosen_arm_index in enumerate(self.curr_pattern):
+            print("chosen_noise_db: " + str(self.arms[self.curr_part][int(chosen_arm_index)]))
+            tb = eve_re_learn_testbed_graph(eve_noise_db=self.arms[self.curr_part][int(chosen_arm_index)], channel_noise_db=-100, max_items=self.bytes_per_part)
+            tb.start()
+            tb.wait()
+
+            #save data to calculate reward later
+            if len(self.total_alice_sent_int) == 0:
+                self.total_alice_sent_int = np.array(tb.blocks_vector_sink_alice.data())
+                self.total_bob_rec_int = np.array(tb.blocks_vector_sink_bob.data())
+            else:
+                self.total_alice_sent_int = np.append(self.total_alice_sent_int, np.array(tb.blocks_vector_sink_alice.data()))
+                self.total_bob_rec_int = np.append(self.total_bob_rec_int, np.array(tb.blocks_vector_sink_bob.data()))
+
+        #print("self.total_alice_sent: " + str(self.total_alice_sent))
+        #print("self.total_bob_rec: " + str(self.total_bob_rec))
+
 
     # given what alice sent and bob received, it scores Eve's decision
-    def calculate_reward(self, alice_sent, bob_rec, chosen_arm):
-        alice_sent_bin_lists = self.ints_to_list_of_binlists(alice_sent)
-        bob_rec_bin_lists = self.ints_to_list_of_binlists(bob_rec)
-        bits_flipped = self.count_bits_flipped(alice_sent_bin_lists, bob_rec_bin_lists)
+    def calculate_reward(self):
+        self.calculate_bits_flipped_per_byte()
+        print("self.bits_flipped_by_byte: " + str(self.bits_flipped_by_byte))
+        self.episode_reward = 0
 
-        if self.with_power_penalty == True:
-            if bits_flipped >= self.bits_flipped_threshold*self.bytes_per_packet:
-                reward = 5 - (self.eve_noise_arms[chosen_arm]+10)*0.1
+        for index, bits_flipped in enumerate(self.bits_flipped_by_byte):
+            #rewarding for flipping at least 2 bits in the byte
+            if bits_flipped >= 2:
+                self.episode_reward=(self.episode_reward+self.artificial_rewards[index])
+                print("adding: "+ str(self.artificial_rewards[index]))
             else:
-                reward = 0
-        else:
-            reward = bits_flipped / self.bytes_per_packet
+                print("adding: 0")
 
-        print("reward: %d" %reward)
-        return(reward)
+            #power penalty
+            self.episode_reward=(self.episode_reward+self.power_penalty_list[int(self.curr_pattern[index])])
+            print("penalty: " + str(self.power_penalty_list[int(self.curr_pattern[index])]))
+
+        print("self.episode_reward: " + str(self.episode_reward))
+
+
+        #MONTE CARLO
+        #self.episode_reward = 0
+        #for timestep, arm_chosen in enumerate(self.curr_pattern):
+        #    self.episode_reward = self.episode_reward + self.artificial_rewards[int(timestep)][int(arm_chosen)]
+
+
+
+    def calculate_value_per_arm(self):
+        for timestep in range(len(self.arms)):
+            for arm_index in range(len(self.arms[timestep])):
+                if(self.arm_counts[timestep][arm_index] != 0):
+                    self.arm_values[timestep][arm_index] = float(self.arm_rewards[timestep][arm_index]) / float(self.arm_counts[timestep][arm_index])
+
+
+    def calculate_best_pattern(self):
+        for timestep in range(len(self.best_pattern)):
+            self.best_pattern[timestep] = self.arm_values[timestep].argmax(axis=0)
+            #print("argmax: " + str(self.arm_values[timestep].argmax(axis=0)))
+
+        print("self.best_pattern: " + str(self.best_pattern))
+
+
 
     ### needs works
-    def update_model(self, chosen_arm, reward):
-        self.arm_counts[chosen_arm] = self.arm_counts[chosen_arm]+1
-        n = float(self.arm_counts[chosen_arm])
+    def update_model(self):
+        #distribute reward evenly among all arms taken within the pattern
+        num_timesteps = len(self.arms)
+        reward_per_arm = self.episode_reward / num_timesteps
 
-        print(average_rewards)
+        for timestep in range(num_timesteps):
+            chosen_arm_index = self.curr_pattern[timestep]
+            self.arm_rewards[timestep][int(chosen_arm_index)]  = self.arm_rewards[timestep][int(chosen_arm_index)] + reward_per_arm
+            self.arm_counts[timestep][int(chosen_arm_index)] = self.arm_counts[timestep][int(chosen_arm_index)] + 1
 
-        avg_reward = self.average_rewards[chosen_arm]
-        new_avg_reward = ((n-1)/n)*avg_reward + reward/n
-        self.average_rewards[chosen_arm] = new_avg_reward
-
-
-    def ints_to_list_of_binlists(self, integer_list):
-        list_of_binlists = [[] for x in range(len(integer_list))]
-        for index, num in enumerate(integer_list):
-            num_in_bin = self.int_to_binlist(num, 8)
-            list_of_binlists[index] = num_in_bin
-        return(list_of_binlists)
+        self.calculate_value_per_arm()
 
 
-    # function to convert an integer to a list of binary numbers
-    def int_to_binlist(self, number, num_bin_digits):
-        tmp_num = number
-        num_in_bin = [0 for x in range(num_bin_digits)]
-        for index in range(len(num_in_bin)):
-            if tmp_num >= 2**(len(num_in_bin)-1-index):
-                tmp_num = tmp_num - (2**(len(num_in_bin)-1-index))
-                num_in_bin[index] = 1
-        # print(num_in_bin)
-        return num_in_bin
 
-    # counts number of bits flipped
-    def count_bits_flipped(self, sent_data, rec_data):
-        num_bits_flipped = 0
-        #print(sent_data)
-        #print(rec_data)
 
-        for i in range(len(sent_data)):
-            for j in range(len(sent_data[i])):
-                if(sent_data[i][j] != rec_data[i][j]):
-                    num_bits_flipped = num_bits_flipped+1
-        return num_bits_flipped
+
+    def calculate_bits_flipped_per_byte(self):
+        self.bits_flipped_by_byte = np.array([])
+        print("self.total_alice_sent_int: " + str(self.total_alice_sent_int))
+        print("self.total_bob_rec_int: " + str(self.total_bob_rec_int))
+
+        #iterate through list of integers sent & received
+        for index in range(len(self.total_alice_sent_int)):
+            #convert each int to binlist
+            bits_sent = int_to_binlist(self.total_alice_sent_int[index], 8)
+            bits_rec = int_to_binlist(self.total_bob_rec_int[index], 8)
+
+            #compare sent & rec, count how many bits flipped per byte
+            bits_flipped = count_bits_flipped(bits_sent, bits_rec)
+
+            #add number to list self.bits_flipped_by_byte
+            self.bits_flipped_by_byte = np.append(self.bits_flipped_by_byte, bits_flipped)
+
+
 
     def graph_averages_overtime(self):
         averages_transposed = np.array(self.historical_average_rewards).T.tolist()
@@ -371,18 +466,65 @@ class eve_learning_model():
         #plt.show()
 
 
+def ints_to_list_of_binlists(integer_list):
+    list_of_binlists = [[] for x in range(len(integer_list))]
+    for index, num in enumerate(integer_list):
+        num_in_bin = self.int_to_binlist(num, 8)
+        list_of_binlists[index] = num_in_bin
+    return(list_of_binlists)
+
+
+# function to convert an integer to a list of binary numbers
+def int_to_binlist(number, num_bin_digits):
+    tmp_num = number
+    num_in_bin = [0 for x in range(num_bin_digits)]
+    for index in range(len(num_in_bin)):
+        if tmp_num >= 2**(len(num_in_bin)-1-index):
+            tmp_num = tmp_num - (2**(len(num_in_bin)-1-index))
+            num_in_bin[index] = 1
+    # print(num_in_bin)
+    return num_in_bin
+
+# counts number of bits flipped
+def count_bits_flipped(sent_data, rec_data):
+    num_bits_flipped = 0
+
+    for i in range(len(sent_data)):
+        if(sent_data[i] != rec_data[i]):
+            num_bits_flipped = num_bits_flipped+1
+    return num_bits_flipped
+
 
 
 if __name__ == '__main__':
 
-    eve_noise_arms = range(-10,11,5)
-    arm_counts = [0 for x in range(len(eve_noise_arms))]
-    average_rewards = [0 for x in range(len(eve_noise_arms))]
-    print("eve_noise_arms: " + str(eve_noise_arms))
-    print("arm_counts: " + str(arm_counts))
-    print("average_rewards: " + str(average_rewards))
+
+    """
+    test example
+        -4 bytes for packet
+        -2 choices for jamming power: -10db or 10db
+        -reward system: 
+            -20 pts for important packet, 5 pts for non-important packet
+            -"successful jam" means flipping at least 2 bits per byte
+        -power penatly: -10 for for high power, 0 for low power
+
+    points per packet: 20, 5, 5, 20
 
 
-    model = eve_learning_model(0.40, eve_noise_arms, arm_counts, average_rewards, 8, True, 2)
-    model.train_model(200)
+    """
+
+
+    arms = np.array([[-10,10],[-10,10],[-10,10],[-10,10]])
+    arm_counts = np.zeros((4,2))
+    arm_rewards = np.zeros((4,2))
+    arm_values = np.zeros((4,2))
+    num_episodes = 25
+    artificial_rewards = np.array([20, 5, 5, 20])
+    artificial_best_pattern = np.array([1,0,0,1])
+    power_penalty_list = np.array([0,-10])
+
+
+    #def __init__(self, arms, arm_counts, arm_rewards, arm_values, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list):
+    model = monte_carlo_model(arms, arm_counts, arm_rewards, arm_values, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list)
+    model.train_model(num_episodes)
 

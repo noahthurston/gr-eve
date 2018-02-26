@@ -44,9 +44,11 @@ class monte_carlo_model():
 		self.episode_reward = 0
 
 		self.average_reward_per_arm = np.zeros((len(self.arm_counts),len(self.arm_counts[0])))
-		self.best_pattern = np.zeros((len(self.arm_counts)))
+		self.best_pattern = np.zeros((len(self.arm_counts)),dtype=int)
 
 		self.pattern_mistakes_over_time = np.array([len(self.arm_counts)])
+
+		self.update_graph_data_increment = 10
 
 	def train_model(self, num_episodes):
 		
@@ -55,15 +57,19 @@ class monte_carlo_model():
 		while self.curr_episode < num_episodes:
 			self.run_episode()
 
-			if(self.curr_episode % 10 == 0):
+			if(self.curr_episode % self.update_graph_data_increment == 0):
+				self.calculate_average_reward_per_arm()
+				print(self.average_reward_per_arm)
+				self.calculate_best_pattern()
 				self.update_graph_data()
+
 			self.curr_episode = self.curr_episode + 1
 
 		self.calculate_average_reward_per_arm()
 		print(self.average_reward_per_arm)
 
-		self.calculate_best_pattern()
-		print(self.best_pattern)
+		#self.calculate_best_pattern()
+		print("END, best pattern: " + str(self.best_pattern))
 
 		self.graph_pattern_mistakes_over_time()
 
@@ -85,10 +91,6 @@ class monte_carlo_model():
 		for time, curr_arms in enumerate(self.arms):
 			self.curr_pattern[time] = random.randint(0,len(curr_arms)-1)
 
-	#finds the best pattern given array of values for each arm in each timestep
-	def find_best_pattern(self):
-		print()
-
 	#using generated pattern, runs episode through the model
 	def run_through_model(self):
 		#right now this done nothing, but it will be used when sending signals through GNU radio
@@ -107,12 +109,14 @@ class monte_carlo_model():
 	def calculate_average_reward_per_arm(self):
 		for timestep, arms in enumerate(self.arm_rewards):
 			for arm_index, arm_reward in enumerate(arms):
-				self.average_reward_per_arm[timestep][arm_index] = float(arm_reward) / float(self.arm_counts[timestep][arm_index])
+				if(self.arm_counts[timestep][arm_index] != 0):
+					self.average_reward_per_arm[timestep][arm_index] = float(arm_reward) / float(self.arm_counts[timestep][arm_index])
 
 
 	def calculate_best_pattern(self):
 		for timestep in range(len(self.best_pattern)):
 			self.best_pattern[timestep] = self.average_reward_per_arm[timestep].argmax(axis=0)
+			print("argmax: " + str(self.average_reward_per_arm[timestep].argmax(axis=0)))
 
 
 	def update_model(self):
@@ -130,8 +134,13 @@ class monte_carlo_model():
 
 		#saving data to graph number of mistakes in best calculation pattern vs time
 		pattern_mistakes = 0
-		self.calculate_best_pattern()
+
+		print("episode: " + str(self.curr_episode))
+		print("artificial best pattern: " + str(self.artificial_best_pattern))
+		print("best pattern: " + str(self.best_pattern))
+
 		for index in range(len(self.best_pattern)):
+			#print("Curr index " + str(index))
 			if self.artificial_best_pattern[index] - self.best_pattern[index] != 0:
 				pattern_mistakes = pattern_mistakes + 1
 		
@@ -139,7 +148,7 @@ class monte_carlo_model():
 		#print(self.pattern_mistakes_over_time)
 
 	def graph_pattern_mistakes_over_time(self):
-		x = np.array(range(len(self.pattern_mistakes_over_time)))
+		x = np.array(range(len(self.pattern_mistakes_over_time))) * self.update_graph_data_increment
 		y = self.pattern_mistakes_over_time
 
 		plt.plot(x,y)
@@ -153,13 +162,44 @@ the best pattern should be: high, low, low, high, high
 
 """
 
-arms = np.array([[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1]])
-arm_counts = np.zeros((10,2))
-average_rewards = np.zeros((10,2))
-artificial_rewards = np.array([[0,5],[5,0],[5,0],[0,5],[0,5],[0,5],[5,0],[5,0],[0,5],[0,5]])
-artificial_best_pattern = np.array([1,0,0,1,1,1,0,0,1,1])
 
 
-test_model = monte_carlo_model(arms, arm_counts, average_rewards, artificial_rewards, artificial_best_pattern)
+def run_five():
+	arms = np.array([[0,1],[0,1],[0,1],[0,1],[0,1]])
+	arm_counts = np.zeros((5,2),dtype=int)
+	average_rewards = np.zeros((5,2))
+	artificial_rewards = np.array([[0,5],[5,0],[5,0],[0,5],[0,5]])
+	artificial_best_pattern = np.array([1,0,0,1,1])
 
-test_model.train_model(100)
+
+	test_model = monte_carlo_model(arms, arm_counts, average_rewards, artificial_rewards, artificial_best_pattern)
+
+	test_model.train_model(100)
+
+def run_ten():
+	arms = np.array([[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1]])
+	arm_counts = np.zeros((10,2),dtype=int)
+	average_rewards = np.zeros((10,2))
+	artificial_rewards = np.array([[0,5],[5,0],[5,0],[0,5],[0,5],[0,5],[5,0],[5,0],[0,5],[0,5]])
+	artificial_best_pattern = np.array([1,0,0,1,1,1,0,0,1,1])
+
+
+	test_model = monte_carlo_model(arms, arm_counts, average_rewards, artificial_rewards, artificial_best_pattern)
+
+	test_model.train_model(100)
+
+def run_twenty():
+	arms = np.array([[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1]])
+	arm_counts = np.zeros((20,2),dtype=int)
+	average_rewards = np.zeros((20,2))
+	artificial_rewards = np.array([[0,5],[5,0],[5,0],[0,5],[0,5],[0,5],[5,0],[5,0],[0,5],[0,5],[0,5],[5,0],[5,0],[0,5],[0,5],[0,5],[5,0],[5,0],[0,5],[0,5]])
+	artificial_best_pattern = np.array([1,0,0,1,1,1,0,0,1,1,1,0,0,1,1,1,0,0,1,1])
+
+
+	test_model = monte_carlo_model(arms, arm_counts, average_rewards, artificial_rewards, artificial_best_pattern)
+
+	test_model.train_model(100)
+
+run_five()
+run_ten()
+run_twenty()
