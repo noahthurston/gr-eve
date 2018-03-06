@@ -4,9 +4,6 @@ from bitarray import bitarray
 import matplotlib.pyplot as plt
 
 
-
-
-outer = np.array([1,2,3])
-
-
-outer = np.append(outer, np.array([3,4,5])
+for x in range(10):
+	rand = np.random.normal(0,10**(-100/20.0))
+	print(rand)

@@ -39,7 +39,7 @@ import random
 
 class eve_re_learn_testbed_graph(gr.top_block):
 
-    def __init__(self, eve_noise_db=1, channel_noise_db=1, max_items=8):
+    def __init__(self, pattern_as_vector, eve_noise_db=1, channel_noise_db=1, max_items=4):
         gr.top_block.__init__(self, "Eve Re Learn Testbed Graph")
 
         ##################################################
@@ -55,7 +55,8 @@ class eve_re_learn_testbed_graph(gr.top_block):
         ##################################################
         # Blocks
         ##################################################
-        self.blocks_vector_source_x_0 = blocks.vector_source_c(vector_sink_list, True, 1, [])
+        self.blocks_vector_source_x_0 = blocks.vector_source_c(pattern_as_vector, False, 1, [])
+
         self.digital_constellation_decoder_cb_0 = digital.constellation_decoder_cb(const)
         self.digital_chunks_to_symbols_xx_0 = digital.chunks_to_symbols_bc((const.points()), 1)
         self.blocks_vector_sink_alice = blocks.vector_sink_b(1)
@@ -67,17 +68,25 @@ class eve_re_learn_testbed_graph(gr.top_block):
         self.blocks_head_0_0 = blocks.head(gr.sizeof_char*1, max_items)
         self.blocks_head_0 = blocks.head(gr.sizeof_char*1, max_items)
         self.blocks_add_xx_0 = blocks.add_vcc(1)
-        self.analog_random_source_x_0 = blocks.vector_source_b(map(int, np.random.randint(0, 2, 1000000)), True)
-        self.analog_fastnoise_source_x_0_0 = analog.fastnoise_source_c(analog.GR_GAUSSIAN, 10**(self.eve_noise_db/20.0), 0, 2**16)
+        self.analog_random_source_x_0 = blocks.vector_source_b(map(int, np.random.randint(0, 4, 1000000)), True)
+        #self.analog_fastnoise_source_x_0_0 = analog.fastnoise_source_c(analog.GR_GAUSSIAN, 10**(self.eve_noise_db/20.0), 0, 2**16)
         self.analog_fastnoise_source_x_0 = analog.fastnoise_source_c(analog.GR_GAUSSIAN, 10**(self.channel_noise_db/20.0), 0, 2**16)
+
+        #self.blocks_vector_source_x_1 = blocks.vector_source_b((0,0), True, 1, [])
 
         ##################################################
         # Connections
         ##################################################
         self.connect((self.analog_fastnoise_source_x_0, 0), (self.blocks_add_xx_0, 0))
-        self.connect((self.analog_fastnoise_source_x_0_0, 0), (self.blocks_add_xx_0, 2))
+        #self.connect((self.analog_fastnoise_source_x_0_0, 0), (self.blocks_add_xx_0, 2))
+        self.connect((self.blocks_vector_source_x_0, 0), (self.blocks_add_xx_0, 2))
+
         self.connect((self.analog_random_source_x_0, 0), (self.blocks_repack_bits_bb_0_0, 0))
         self.connect((self.analog_random_source_x_0, 0), (self.blocks_repack_bits_bb_1, 0))
+
+        #self.connect((self.blocks_vector_source_x_1, 0), (self.blocks_repack_bits_bb_0_0, 0))
+        #self.connect((self.blocks_vector_source_x_1, 0), (self.blocks_repack_bits_bb_1, 0))
+
         self.connect((self.blocks_add_xx_0, 0), (self.digital_constellation_decoder_cb_0, 0))
         self.connect((self.blocks_head_0, 0), (self.blocks_vector_sink_bob, 0))
         self.connect((self.blocks_head_0_0, 0), (self.blocks_vector_sink_alice, 0))
@@ -311,8 +320,22 @@ class monte_carlo_model():
             self.curr_pattern[time] = random.randint(0,len(curr_arms)-1)
 
 
+    def pattern_to_vector(self):
+        #need to find real number
+        samples_per_byte = 4
 
-    #using generated pattern, runs episode through the model
+        pattern_as_vector = np.zeros((samples_per_byte*self.parts_per_packet))
+
+        for pattern_index, pattern_part in enumerate(self.curr_pattern):
+            for vector_index in range(pattern_index*samples_per_byte, (pattern_index+1)*samples_per_byte):
+                # set vector value to sample from gaussian distribution
+                pattern_as_vector[vector_index] = np.random.normal(0,10**(self.arms[pattern_index][int(pattern_part)]/20.0))
+
+        print("pattern_as_vector: " + str(pattern_as_vector))
+        return pattern_as_vector 
+
+
+    # using generated pattern, runs episode through the model
     def run_through_model(self):
         #right now this done nothing, but it will be used when sending signals through GNU radio
         print("self.curr_pattern: " + str(self.curr_pattern))
@@ -321,20 +344,26 @@ class monte_carlo_model():
         self.total_alice_sent_int = np.array([])
         self.total_bob_rec_int = np.array([])
 
-        for timestep, chosen_arm_index in enumerate(self.curr_pattern):
-            print("chosen_noise_db: " + str(self.arms[self.curr_part][int(chosen_arm_index)]))
-            tb = eve_re_learn_testbed_graph(eve_noise_db=self.arms[self.curr_part][int(chosen_arm_index)], channel_noise_db=-100, max_items=self.bytes_per_part)
-            tb.start()
-            tb.wait()
+        pattern_as_vector = self.pattern_to_vector()
 
-            #save data to calculate reward later
-            if len(self.total_alice_sent_int) == 0:
-                self.total_alice_sent_int = np.array(tb.blocks_vector_sink_alice.data())
-                self.total_bob_rec_int = np.array(tb.blocks_vector_sink_bob.data())
-            else:
-                self.total_alice_sent_int = np.append(self.total_alice_sent_int, np.array(tb.blocks_vector_sink_alice.data()))
-                self.total_bob_rec_int = np.append(self.total_bob_rec_int, np.array(tb.blocks_vector_sink_bob.data()))
+        #for timestep, chosen_arm_index in enumerate(self.curr_pattern):
+        
+        #print("chosen_noise_db: " + str(self.arms[self.curr_part][int(chosen_arm_index)]))
+        tb = eve_re_learn_testbed_graph(pattern_as_vector, eve_noise_db=0, channel_noise_db=-100, max_items=4)
+        tb.start()
+        
+        tb.wait()
 
+
+        #save data to calculate reward later
+        if len(self.total_alice_sent_int) == 0:
+            self.total_alice_sent_int = np.array(tb.blocks_vector_sink_alice.data())
+            self.total_bob_rec_int = np.array(tb.blocks_vector_sink_bob.data())
+        else:
+            self.total_alice_sent_int = np.append(self.total_alice_sent_int, np.array(tb.blocks_vector_sink_alice.data()))
+            self.total_bob_rec_int = np.append(self.total_bob_rec_int, np.array(tb.blocks_vector_sink_bob.data()))
+
+            #tb.stop()
         #print("self.total_alice_sent: " + str(self.total_alice_sent))
         #print("self.total_bob_rec: " + str(self.total_bob_rec))
 
@@ -515,15 +544,15 @@ if __name__ == '__main__':
     """
 
 
-    arms = np.array([[-10,10],[-10,10],[-10,10],[-10,10]])
+    arms = np.array([[-100,100],[-100,100],[-100,100],[-100,100]])
     arm_counts = np.zeros((4,2)) #number of times each arm has been chosen
     arm_rewards = np.zeros((4,2)) #total reward each arm has received
     arm_average_rewards = np.zeros((4,2)) #average reward the arm receives
-    num_episodes = 25
     artificial_rewards = np.array([20, 5, 5, 20])
     artificial_best_pattern = np.array([1,0,0,1])
     power_penalty_list = np.array([0,-10])
 
+    num_episodes = 25
 
     #def __init__(self, arms, arm_counts, arm_rewards, arm_average_rewards, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list):
     model = monte_carlo_model(arms, arm_counts, arm_rewards, arm_average_rewards, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list)
