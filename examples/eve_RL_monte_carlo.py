@@ -55,6 +55,7 @@ class eve_re_learn_testbed_graph(gr.top_block):
         ##################################################
         # Blocks
         ##################################################
+        self.blocks_vector_source_x_0 = blocks.vector_source_c(vector_sink_list, True, 1, [])
         self.digital_constellation_decoder_cb_0 = digital.constellation_decoder_cb(const)
         self.digital_chunks_to_symbols_xx_0 = digital.chunks_to_symbols_bc((const.points()), 1)
         self.blocks_vector_sink_alice = blocks.vector_sink_b(1)
@@ -160,7 +161,7 @@ cons:
 
 #created separate class so that the reinforcement learning table could be accessed easily anywhere within the function
 class monte_carlo_model():
-    def __init__(self, arms, arm_counts, arm_rewards, arm_values, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list):
+    def __init__(self, arms, arm_counts, arm_rewards, arm_average_rewards, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list):
     #def __init__(self, epsilon, eve_noise_patterns, arm_counts, average_rewards, bytes_per_packet, with_power_penalty, bits_flipped_threshold):
         
         """
@@ -181,7 +182,7 @@ class monte_carlo_model():
         self.arms = arms
         self.arm_counts = arm_counts
         self.arm_rewards = arm_rewards
-        self.arm_values = arm_values
+        self.arm_average_rewards = arm_average_rewards
 
         self.curr_episode = 0
         self.bytes_per_part = 1
@@ -286,7 +287,7 @@ class monte_carlo_model():
         self.update_model()
         self.calculate_best_pattern()
 
-        print("self.arm_values: \n" + str(self.arm_values))
+        print("self.arm_average_rewards: \n" + str(self.arm_average_rewards))
 
 
 
@@ -370,13 +371,13 @@ class monte_carlo_model():
         for timestep in range(len(self.arms)):
             for arm_index in range(len(self.arms[timestep])):
                 if(self.arm_counts[timestep][arm_index] != 0):
-                    self.arm_values[timestep][arm_index] = float(self.arm_rewards[timestep][arm_index]) / float(self.arm_counts[timestep][arm_index])
+                    self.arm_average_rewards[timestep][arm_index] = float(self.arm_rewards[timestep][arm_index]) / float(self.arm_counts[timestep][arm_index])
 
 
     def calculate_best_pattern(self):
         for timestep in range(len(self.best_pattern)):
-            self.best_pattern[timestep] = self.arm_values[timestep].argmax(axis=0)
-            #print("argmax: " + str(self.arm_values[timestep].argmax(axis=0)))
+            self.best_pattern[timestep] = self.arm_average_rewards[timestep].argmax(axis=0)
+            #print("argmax: " + str(self.arm_average_rewards[timestep].argmax(axis=0)))
 
         print("self.best_pattern: " + str(self.best_pattern))
 
@@ -515,16 +516,26 @@ if __name__ == '__main__':
 
 
     arms = np.array([[-10,10],[-10,10],[-10,10],[-10,10]])
-    arm_counts = np.zeros((4,2))
-    arm_rewards = np.zeros((4,2))
-    arm_values = np.zeros((4,2))
+    arm_counts = np.zeros((4,2)) #number of times each arm has been chosen
+    arm_rewards = np.zeros((4,2)) #total reward each arm has received
+    arm_average_rewards = np.zeros((4,2)) #average reward the arm receives
     num_episodes = 25
     artificial_rewards = np.array([20, 5, 5, 20])
     artificial_best_pattern = np.array([1,0,0,1])
     power_penalty_list = np.array([0,-10])
 
 
-    #def __init__(self, arms, arm_counts, arm_rewards, arm_values, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list):
-    model = monte_carlo_model(arms, arm_counts, arm_rewards, arm_values, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list)
+    #def __init__(self, arms, arm_counts, arm_rewards, arm_average_rewards, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list):
+    model = monte_carlo_model(arms, arm_counts, arm_rewards, arm_average_rewards, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list)
     model.train_model(num_episodes)
 
+
+
+
+"""
+TO DO:
+    -use vector source instead of n-timestep instantiations of topblock
+    -get traffic generator working, and put model in between
+    -add epsilon component (currently 100% explore)
+
+"""
