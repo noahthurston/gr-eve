@@ -153,39 +153,8 @@ def main(top_block_cls=eve_re_learn_testbed_graph, options=None):
     qapp.exec_()
 
 
-"""
-New idea
--jam at random points
--say the average reward at those points is the average reward of every set its participated in
--during explore: pick random 4 points to block
--during exploit: pick top 4 performing points to block
-
-pros:
--could find best set of bytes to block
--wouldn't be bound by static "patterns"
-
-cons:
--very dependent on fixed packet sizes (but could later move to state dependent reinforcement learning algorithms) 
-"""
-
-#created separate class so that the reinforcement learning table could be accessed easily anywhere within the function
 class monte_carlo_model():
     def __init__(self, arms, arm_counts, arm_rewards, arm_average_rewards, num_episodes, artificial_rewards, artificial_best_pattern, power_penalty_list):
-    #def __init__(self, epsilon, eve_noise_patterns, arm_counts, average_rewards, bytes_per_packet, with_power_penalty, bits_flipped_threshold):
-        
-        """
-        self.epsilon = epsilon
-        self.eve_noise_arms = eve_noise_arms #list of jamming patterns
-        self.arm_counts = arm_counts #counts of how many times each arm has been taken
-        self.average_rewards = average_rewards
-        self.bytes_per_packet = bytes_per_packet 
-        self.with_power_penalty = with_power_penalty
-        #number of bits to flip in order to get a reward
-        self.bits_flipped_threshold = bits_flipped_threshold
-        #record of average rewards for debugging
-        self.historical_average_rewards = [[]]
-        self.historical_pickaction_choices = [[]]
-        """
 
         #MONTE CARLO
         self.arms = arms
@@ -229,58 +198,12 @@ class monte_carlo_model():
     def train_model(self, num_trials):
         print("beginning training")
 
-        """
-        self.historical_average_rewards = [[0 for x in range(len(self.eve_noise_arms))] for y in range(num_trials)]
-        self.historical_pickaction_choices = [[0 for x in range(len(self.eve_noise_arms))] for y in range(num_trials)]
-
-        # loop through trainning trialss
-        for trial in range(num_trials):
-            print("\nrunning trial #%d" %trial)
-            self.run_trial() 
-
-            print("current rewards: "+ str(self.average_rewards))
-            total_counts = float(sum(self.arm_counts))
-            print("current pickation frequency: "+ str([float(count)/total_counts for count in self.arm_counts]))
-            
-            # recording values for graphing average rewards over time
-            for index, avg in enumerate(self.average_rewards):
-                self.historical_average_rewards[trial][index] = avg
-
-            # recorddng values for graphing the percentage of each arm chosen over time
-            for index, count in enumerate(self.arm_counts):
-                self.historical_pickaction_choices[trial][index] = (float(count)/float(sum(self.arm_counts)))
-
-            #print(self.historical_average_rewards)
-
-        self.graph_averages_overtime()
-        self.graph_pickaction_choices_overtime()
-        """
-
-        #MONTE CARLO
-        #print(self.artificial_rewards)
-
         while self.curr_episode < num_episodes:
             print("EPISODE #" + str(self.curr_episode) + "-------------------------------------")
             self.run_episode()
             print("\n")
-            """
-            if(self.curr_episode % self.update_graph_data_increment == 0):
-                self.calculate_average_reward_per_arm()
-                print(self.average_reward_per_arm)
-                self.calculate_best_pattern()
-                self.update_graph_data()
-            """
 
             self.curr_episode = self.curr_episode + 1
-
-        #self.calculate_average_reward_per_arm()
-        
-        #print(self.average_reward_per_arm)
-
-        #self.calculate_best_pattern()
-        #print("END, best pattern: " + str(self.best_pattern))
-
-        #self.graph_pattern_mistakes_over_time()
 
         print("done training")
 
@@ -424,8 +347,6 @@ class monte_carlo_model():
             self.arm_counts[timestep][int(chosen_arm_index)] = self.arm_counts[timestep][int(chosen_arm_index)] + 1
 
         self.calculate_value_per_arm()
-
-
 
 
 
