@@ -30,7 +30,6 @@ for episode in range(NUM_EPISODES):
 
     mod_overtime = mod_overtime + [ob]
 
-Episode
 marker_colors = ['r-', 'y-', 'b-', 'g-', 'c-']
 
 plt.figure(0)
