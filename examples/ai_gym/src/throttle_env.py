@@ -32,7 +32,7 @@ class ThrottleEnv():
         self.packet_record = np.zeros(NUM_MODS) + 1
 
         #current modulation, basically state
-        self.curr_mod_index = 0
+        self.curr_mod_index = 3
 
         #if packet succeeded, ==1
         self.packet_success = 1
@@ -71,21 +71,23 @@ class ThrottleEnv():
             self.packet_success = 1
 
         #update record
-        self.packet_record = self.packet_record[:-3] + [self.packet_success]
+        self.packet_record = np.append(self.packet_record[-3:], self.packet_success)
 
         #check to go up/down modulation
-        if np.sum(self.packet_record) <= 1:
+        #down 1 or 0 gets through
+        if np.sum(self.packet_record) <= 0:
             #drop modulation
             if self.curr_mod_index != 0: self.curr_mod_index -= 1
-        elif np.sum(self.packet_record) >=3:
+        #up if 3 or 4 get through
+        elif np.sum(self.packet_record) >=4:
             #up modulation
-            if self.curr_mod_index != 0: self.curr_mod_index += 1
+            if self.curr_mod_index != 3: self.curr_mod_index += 1
 
 
     def _get_reward(self, action):
         #if packet was jammed, reward=3-jamming strength
         reward = 0
-        if self.packet_success == 0:
+        if self.curr_mod_index <= 1:
             reward = 4 - action
         return reward
 

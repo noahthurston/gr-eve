@@ -9,6 +9,7 @@ class epsilon_greedy_model():
         self.epsilon = epsilon
         self.counts = counts
         self.average_rewards = average_rewards
+        self.average_reward_earned = 0
 
     def initalize_lists(self, num_arms):
         self.counts = np.zeros(num_arms)
@@ -28,6 +29,9 @@ class epsilon_greedy_model():
     def update_model(self, chosen_arm, reward):
         self.counts[chosen_arm] = self.counts[chosen_arm] + 1
         n = float(self.counts[chosen_arm])
+
+        total_counts = np.sum(self.counts)
+        self.average_reward_earned = ((total_counts - 1) / total_counts) * self.average_reward_earned + reward / total_counts
 
         avg_reward = self.average_rewards[chosen_arm]
         new_avg_reward = ((n - 1) / n) * avg_reward + reward / n
