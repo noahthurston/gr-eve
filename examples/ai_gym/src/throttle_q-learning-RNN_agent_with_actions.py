@@ -10,16 +10,19 @@ import throttle_env
 # create environment
 env = throttle_env.ThrottleEnv()
 
+#each input will know be the currently observed state and the last action taken
+
 # variables
 num_inputs = 1
 num_hidden = 16
+num_timesteps = 10
 hidden_activation = tf.nn.relu
 num_outputs = 4  # equal to action space
 initializer = tf.contrib.layers.variance_scaling_initializer()
 
 # training
-learning_rate = 0.001
-num_steps = 10*1000
+learning_rate = 0.01
+num_steps = 50*1000
 training_start = 1000
 training_interval = 3
 save_steps = 100
@@ -33,7 +36,7 @@ checkpoint_to_load = "../models/blahblah.ckpt"
 replay_memory_size = 10*1000
 replay_memory = deque([], maxlen=replay_memory_size)
 
-eps_min = 0.05
+eps_min = 0.01
 eps_max = 1.0
 eps_decay_steps = 50*1000
 
@@ -48,10 +51,26 @@ def epsilon_greedy(q_values, step):
 # builds NN for predicting q-values based on state
 def q_network(X_state, scope):
     with tf.variable_scope(scope) as scope:
+
+        """
         hidden_layer = tf.contrib.layers.fully_connected(X_state, num_hidden, activation_fn=hidden_activation,
                                                          weights_initializer=initializer)
         outputs = tf.contrib.layers.fully_connected(hidden_layer, num_outputs, activation_fn=None,
                                                     weights_initializer=initializer)
+        """
+
+        #RNN: input n-timesteps of state, output 4 q-values)
+        cell = tf.nn.rnn_cell.LSTMCell(num_hidden, state_is_tuple=True)
+        rnn_output, last_state = tf.nn.dynamic_rnn(cell, X_state, dtype=tf.float32)
+
+        rnn_output_T = tf.transpose(rnn_output, [1, 0, 2])
+        rnn_last_output = tf.gather(rnn_output_T, int(rnn_output_T.get_shape()[0]) - 1)
+
+        #create dense layer before output
+        weights = tf.Variable(tf.truncated_normal([num_hidden, num_outputs]))
+        biases = tf.Variable(tf.constant(0.1, shape=[num_outputs]))
+
+        outputs = tf.matmul(rnn_last_output, weights) + biases
 
     trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope.name)
     trainable_vars_by_name = {var.name[len(scope.name):]: var for var in trainable_vars}
@@ -80,7 +99,9 @@ def build_graph():
 
 def train():
 
-    X_state = tf.placeholder(tf.float32, shape=[None, num_inputs])
+
+    #X_state = tf.placeholder(tf.float32, shape=[None, num_inputs])
+    X_state = tf.placeholder(tf.float32, shape=[None, num_timesteps, num_inputs])
 
     # create networks
     actor_q_values, actor_vars = q_network(X_state, scope='q_networks/actor')
@@ -105,8 +126,9 @@ def train():
     init = tf.global_variables_initializer()
     saver = tf.train.Saver()
 
-    # initialize observation to 2
-    state = 2
+    # initialize observation to 0
+    next_state = np.zeros(num_timesteps)
+    state = next_state
 
     with tf.Session() as sess:
         init.run()
@@ -124,12 +146,12 @@ def train():
             #if done statement... our game never ends
 
             # actor decides what to do
-            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1,1)})
+            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, 1)})
             action = epsilon_greedy(q_values, step)
 
             # actor plays
             obs, reward, done = env._step(action)
-            next_state = obs
+            next_state = np.append(next_state, obs)[-num_timesteps:]
 
             # recording for replay memory
             replay_memory.append((state, action, reward, next_state, 1-done))  # state, action, reward, next_state, continue
@@ -140,15 +162,12 @@ def train():
                 continue
 
             X_state_val, X_action_val, rewards, X_next_state_val, continues = (sample_memories(batch_size))
-            next_q_values = actor_q_values.eval(feed_dict={X_state: np.array(X_next_state_val).reshape(-1,1)})
+            next_q_values = actor_q_values.eval(feed_dict={X_state: np.array(X_next_state_val).reshape(-1, num_timesteps, num_inputs)})
             max_next_q_values = np.max(next_q_values, axis=1, keepdims=True)
-            print(rewards)
-            print(continues)
-            print(discount_rate)
-            print("max_next_q_values" + str(max_next_q_values))
+
             y_val = rewards + continues * discount_rate * max_next_q_values
             #print(y_val)
-            training_op.run(feed_dict={X_state: np.array(X_state_val).reshape(-1,1), X_action: X_action_val, y:y_val})
+            training_op.run(feed_dict={X_state: np.array(X_state_val).reshape(-1, num_timesteps, num_inputs), X_action: X_action_val, y: y_val})
 
             # copy critic to actor
             if step % copy_steps == 0:
@@ -165,7 +184,7 @@ def train():
 def validate(saved_filename):
 
 
-    X_state = tf.placeholder(tf.float32, shape=[None, num_inputs])
+    X_state = tf.placeholder(tf.float32, shape=[None, num_timesteps, num_inputs])
 
     # create networks
     actor_q_values, actor_vars = q_network(X_state, scope='q_networks/actor')
@@ -195,10 +214,11 @@ def validate(saved_filename):
     init = tf.global_variables_initializer()
     saver = tf.train.Saver()
 
-    # initialize state to 2
-    state = 2
+    # initialize observation to 0
+    next_state = np.zeros(num_timesteps)
+    state = next_state
 
-    num_episodes = 20
+    num_episodes = 40
 
     state_overtime = []
     reward_overtime = []
@@ -217,7 +237,7 @@ def validate(saved_filename):
         env = throttle_env.ThrottleEnv()
 
         for episode in range(num_episodes):
-            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, 1)})
+            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, num_inputs)})
             action = np.argmax(q_values)
 
             obs, reward, done = env._step(action)
@@ -226,25 +246,12 @@ def validate(saved_filename):
             action_overtime.append(action)
             reward_overtime.append(reward)
 
-            state = obs
+            state = np.append(state, obs)[-num_timesteps:]
 
-        print("state_overtime: " + str(state_overtime))
+        print("state_overtime: " + str(np.array(state_overtime, dtype=int).T[-1].tolist()))
         print("action_overtime: " + str(action_overtime))
         print("reward_overtime: " + str(reward_overtime))
         print("average_reward: " + str(np.average(reward_overtime)))
 
-#train()
-validate("QNN_05-20--16-49")
-
-
-"""
-Notes:
-
--model fluctuates between states 0,1
--jams at 0, 2 respectively
--reward fluctuates between 4, 2
--average reward overtime is 3
-
-
-
-"""
+train()
+#validate("QNN_05-21--15-36")
