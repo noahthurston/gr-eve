@@ -1,0 +1,119 @@
+NOTES!!!
+
+
+
+
+
+
+NN ... regardless of training this is as good as it gets (I think)
+state_overtime: [2, 3, 3, 3, 2, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1]
+action_overtime: [3, 3, 3, 3, 3, 2, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 2, 2]
+reward_overtime: [0, 0, 0, 0, 1, 2, 4, 4, 4, 4, 2, 2, 2, 2, 4, 4, 4, 4, 2, 2]
+average_reward: 2.35 .... will approach 3
+
+
+
+
+
+
+
+
+
+
+
+RNN
+
+THIS IS WITH ALL FAIL/SUCCEED CRITERIA FOR MOD CHANGES
+
+QNN_05-21--14-33
+trained for 10k at LR=0.001
+num_hidden = 16
+num_timesteps = 3
+state_overtime: [0, 3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0]
+action_overtime: [0, 2, 2, 3, 3, 2, 0, 2, 2, 2, 2, 0, 0, 0, 0, 2, 2, 2, 2, 0]
+reward_overtime: [0, 0, 0, 0, 0, 2, 4, 2, 2, 2, 2, 4, 4, 4, 4, 2, 2, 2, 2, 4]
+average_reward: 2.1 .... will approach 3
+
+
+QNN_05-21--14-49
+trained for 10k at LR=0.001
+num_hidden = 16
+num_timesteps = 6
+state_overtime: [0, 3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1]
+action_overtime: [0, 3, 3, 2, 2, 3, 0, 3, 3, 3, 2, 0, 0, 0, 0, 2, 2, 0, 0, 2]
+reward_overtime: [0, 0, 0, 0, 0, 1, 4, 1, 1, 1, 2, 4, 4, 4, 4, 2, 2, 4, 4, 2]
+average_reward: 2.0 .... will approach 3
+
+THIS IS WITH ALL FAIL/SUCCEED CRITERIA FOR MOD CHANGES
+
+QNN_05-21--15-02
+trained for 10k at LR=0.01
+num_hidden = 16
+num_timesteps = 6
+SAME KINDA
+
+training for longer
+
+
+QNN_05-21--15-07
+trained for 50k at LR=0.01
+num_hidden = 16
+num_timesteps = 6
+state_overtime: [0, 3, 3, 3, 3, 2, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1]
+action_overtime: [0, 2, 3, 3, 3, 3, 2, 0, 0, 0, 0, 2, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0]
+reward_overtime: [0, 0, 0, 0, 0, 1, 2, 4, 4, 4, 4, 2, 4, 4, 4, 2, 2, 2, 2, 4, 4, 4, 2, 4, 4, 4, 4, 2, 4, 4]
+average_reward: 2.7 ...approaches 3.25
+
+MUST train for 50K so it can practice consecutive best choices
+eps_min = 0.20 or 0.05... I think?
+
+Longer the window for perfection, greater advantage it can obtain
+
+
+trying eps_min = 0.01
+NO DIFFERENCE b/c it doesnt know its last action, and after 6+ of 1 mod it forgets when was the last time it jammed so it starts spamming
+
+increasing timesteps to 10, should increase reward
+
+
+
+QNN_05-21--15-36
+num_timesteps = 10
+state_overtime: [0, 3, 3, 3, 3, 2, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+action_overtime: [0, 3, 3, 3, 3, 2, 2, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2]
+reward_overtime: [0, 0, 0, 0, 0, 2, 2, 4, 4, 4, 4, 2, 4, 4, 4, 2, 4, 4, 4, 2, 2, 2, 2, 4, 4, 4, 2, 4, 4, 4, 4, 2, 4, 4, 4, 2, 4, 4, 4, 2]
+average_reward: 2.9... approaches 3.3
+
+still capped by not knowing its past actions
+
+
+added past actions
+
+QNN_05-21--16-19
+trained for 50k
+num_hidden = 16
+num_timesteps = 10
+state_overtime: [3, 3, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+action_overtime: [2, 3, 3, 3, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0]
+delayed_action_overtime:[-1, 2, 3, 3, 3, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0]
+reward_overtime: [0, 0, 0, 0, 2, 4, 4, 4, 2, 4, 4, 4, 2, 4, 4, 4, 2, 4, 4, 4]
+average_reward: 2.8 ... approaches 3.5 (best possible with env)
+
+going to train for only 10k
+worked, avgs 3.5 reward
+
+going to train for only 1k
+worked
+
+
+now trying with smaller network
+num_hidden = 16
+num_timesteps = 3
+
+
+
+GRAPH: SA_RNN.png
+num_steps = 5k
+num_hidden = 16
+num_timesteps = 5
+
