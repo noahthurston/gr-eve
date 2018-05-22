@@ -18,8 +18,8 @@ num_outputs = 4  # equal to action space
 initializer = tf.contrib.layers.variance_scaling_initializer()
 
 # training
-learning_rate = 0.001
-num_steps = 10*1000
+learning_rate = 0.005
+num_steps = 5*1000
 training_start = 1000
 training_interval = 3
 save_steps = 100
@@ -30,12 +30,15 @@ batch_size = 50
 checkpoint_path = "../models/"
 checkpoint_to_load = "../models/blahblah.ckpt"
 
+test_interval = 250
+test_episodes = 2000
+
 replay_memory_size = 10*1000
 replay_memory = deque([], maxlen=replay_memory_size)
 
 eps_min = 0.05
 eps_max = 1.0
-eps_decay_steps = 50*1000
+eps_decay_steps = 5*1000
 
 # epsilon greedy for exploring game
 def epsilon_greedy(q_values, step):
@@ -106,7 +109,9 @@ def train():
     saver = tf.train.Saver()
 
     # initialize observation to 2
-    state = 2
+    state = 3
+
+    avg_reward_overtime = []
 
     with tf.Session() as sess:
         init.run()
@@ -142,10 +147,6 @@ def train():
             X_state_val, X_action_val, rewards, X_next_state_val, continues = (sample_memories(batch_size))
             next_q_values = actor_q_values.eval(feed_dict={X_state: np.array(X_next_state_val).reshape(-1,1)})
             max_next_q_values = np.max(next_q_values, axis=1, keepdims=True)
-            print(rewards)
-            print(continues)
-            print(discount_rate)
-            print("max_next_q_values" + str(max_next_q_values))
             y_val = rewards + continues * discount_rate * max_next_q_values
             #print(y_val)
             training_op.run(feed_dict={X_state: np.array(X_state_val).reshape(-1,1), X_action: X_action_val, y:y_val})
@@ -162,21 +163,46 @@ def train():
                 saver.save(sess, checkpoint_save_name)
                 #saver.save(sess, checkpoint_save_name)
 
+            if step % test_interval == 0:
+                avg_reward = test_model(actor_q_values, X_state, test_episodes=test_episodes)
+                print("avg_reward: "+ str(avg_reward))
+                avg_reward_overtime.append(avg_reward)
+
+        print("Average reward over time: " + str(avg_reward_overtime))
+        plt.figure(1)
+        plt.plot(np.array(range(len(avg_reward_overtime)))*test_interval, avg_reward_overtime)
+        plt.title("Average Reward vs Training Episode")
+
+        plt.xlabel("Training Episode")
+        plt.ylabel("Average Reward")
+
+        plt.ylim(0,4)
+        plt.grid(True)
+        plt.show()
+
+def test_model(actor_q_values, X_state, test_episodes=10000):
+    reward_overtime = []
+    next_state = np.zeros((num_inputs))
+    state = next_state
+    last_action = 0
+
+    for episode in range(test_episodes):
+        q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, 1)})
+        action = np.argmax(q_values)
+
+        obs, reward, done = env._step(action)
+        state = obs
+        reward_overtime.append(reward)
+
+    return np.average(reward_overtime)
+
+
 def validate(saved_filename):
-
-
     X_state = tf.placeholder(tf.float32, shape=[None, num_inputs])
 
     # create networks
     actor_q_values, actor_vars = q_network(X_state, scope='q_networks/actor')
     critic_q_values, critic_vars = q_network(X_state, scope='q_networks/critic')
-
-
-    """
-    # copy operation
-    copy_ops = [actor_var.assign(critic_vars[var_name]) for var_name, actor_var in actor_vars.items()]
-    copy_critic_to_actor = tf.group(*copy_ops)
-    """
 
     X_action = tf.placeholder(tf.int32, shape=[None])
     q_value = tf.reduce_sum(critic_q_values * tf.one_hot(X_action, num_outputs), axis=1, keepdims=True)
@@ -184,13 +210,6 @@ def validate(saved_filename):
     # target q value
     y = tf.placeholder(tf.float32, shape=[None, 1])
 
-    """
-    # training operations
-    cost = tf.reduce_mean(tf.square(y - q_value))
-    global_step = tf.Variable(0, trainable=False, name='global_step')
-    optimizer = tf.train.AdamOptimizer(learning_rate)
-    training_op = optimizer.minimize(cost, global_step=global_step)
-    """
 
     init = tf.global_variables_initializer()
     saver = tf.train.Saver()
@@ -233,8 +252,8 @@ def validate(saved_filename):
         print("reward_overtime: " + str(reward_overtime))
         print("average_reward: " + str(np.average(reward_overtime)))
 
-#train()
-validate("QNN_05-20--16-49")
+train()
+#validate("QNN_05-20--16-49")
 
 
 """

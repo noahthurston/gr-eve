@@ -96,15 +96,6 @@ def sample_memories(batch_size):
     return (cols[0], cols[1], cols[2].reshape(-1, 1), cols[3], cols[4].reshape(-1, 1))
 
 
-
-
-"""
-def build_graph():    
-
-    return init, train, loss, X_placeholder, y_placeholder, outputs, sentence_loss_pl
-"""
-
-
 def train():
     # X_state = tf.placeholder(tf.float32, shape=[None, num_inputs])
     X_state = tf.placeholder(tf.float32, shape=[None, num_timesteps, num_inputs])
