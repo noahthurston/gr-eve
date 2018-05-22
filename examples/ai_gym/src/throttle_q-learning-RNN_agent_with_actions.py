@@ -2,9 +2,9 @@ import numpy as np
 import tensorflow as tf
 from collections import deque
 import datetime
-import os
+#import os
 import matplotlib.pyplot as plt
-import gym
+#import gym
 import throttle_env
 
 # create environment
@@ -13,16 +13,16 @@ env = throttle_env.ThrottleEnv()
 #each input will know be the currently observed state and the last action taken
 
 # variables
-num_inputs = 1
+num_inputs = 2
 num_hidden = 16
-num_timesteps = 10
+num_timesteps = 5
 hidden_activation = tf.nn.relu
 num_outputs = 4  # equal to action space
 initializer = tf.contrib.layers.variance_scaling_initializer()
 
 # training
-learning_rate = 0.01
-num_steps = 50*1000
+learning_rate = 0.005
+num_steps = 5*1000
 training_start = 1000
 training_interval = 3
 save_steps = 100
@@ -31,14 +31,16 @@ discount_rate = 0.95
 skip_start = 0
 batch_size = 50
 checkpoint_path = "../models/"
-checkpoint_to_load = "../models/blahblah.ckpt"
+
+test_interval = 500
+test_episodes = 2000
 
 replay_memory_size = 10*1000
 replay_memory = deque([], maxlen=replay_memory_size)
 
 eps_min = 0.01
 eps_max = 1.0
-eps_decay_steps = 50*1000
+eps_decay_steps = 5*1000
 
 # epsilon greedy for exploring game
 def epsilon_greedy(q_values, step):
@@ -98,8 +100,6 @@ def build_graph():
 """
 
 def train():
-
-
     #X_state = tf.placeholder(tf.float32, shape=[None, num_inputs])
     X_state = tf.placeholder(tf.float32, shape=[None, num_timesteps, num_inputs])
 
@@ -127,8 +127,13 @@ def train():
     saver = tf.train.Saver()
 
     # initialize observation to 0
-    next_state = np.zeros(num_timesteps)
+    next_state = np.zeros((num_timesteps, num_inputs))
     state = next_state
+
+    # need to record last action
+    last_action = 0
+
+    avg_reward_overtime = []
 
     with tf.Session() as sess:
         init.run()
@@ -140,21 +145,20 @@ def train():
                 break
             episode += 1
 
-            #print("step: " + str(step))
-            #print("episode: " + str(episode))
-
-            #if done statement... our game never ends
-
             # actor decides what to do
-            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, 1)})
+            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, num_inputs)})
             action = epsilon_greedy(q_values, step)
 
             # actor plays
             obs, reward, done = env._step(action)
-            next_state = np.append(next_state, obs)[-num_timesteps:]
 
             # recording for replay memory
+            state_action_pair = np.append(obs, last_action)
+            next_state = np.append(state[-(num_timesteps-1):], state_action_pair).reshape(num_timesteps, num_inputs)
+
             replay_memory.append((state, action, reward, next_state, 1-done))  # state, action, reward, next_state, continue
+
+            last_action = action
             state = next_state
 
             # only train critic on training intervals
@@ -181,8 +185,47 @@ def train():
                 saver.save(sess, checkpoint_save_name)
                 #saver.save(sess, checkpoint_save_name)
 
-def validate(saved_filename):
+            if step % test_interval == 0:
+                avg_reward = test_model(actor_q_values, X_state, test_episodes=test_episodes)
+                print("avg_reward: "+ str(avg_reward))
+                avg_reward_overtime.append(avg_reward)
 
+        print("Average reward over time: " + str(avg_reward_overtime))
+        plt.figure(1)
+        plt.plot(np.array(range(len(avg_reward_overtime)))*test_interval, avg_reward_overtime)
+        plt.title("Average Reward vs Training Episode")
+
+        plt.xlabel("Training Episode")
+        plt.ylabel("Average Reward")
+
+        plt.ylim(0,4)
+        plt.grid(True)
+        plt.show()
+
+def test_model(actor_q_values, X_state, test_episodes=10000):
+    reward_overtime = []
+    next_state = np.zeros((num_timesteps, num_inputs))
+    state = next_state
+    last_action = 0
+
+    for episode in range(test_episodes):
+        q_values = actor_q_values.eval(feed_dict={X_state: state.reshape(-1, num_timesteps, num_inputs)})
+        action = np.argmax(q_values)
+
+        obs, reward, done = env._step(action)
+
+        state_action_pair = np.append(obs, last_action)
+        next_state = np.append(state[-(num_timesteps-1):,:], state_action_pair).reshape(num_timesteps, num_inputs)
+
+        last_action = action
+        state = next_state
+
+        reward_overtime.append(reward)
+
+    return np.average(reward_overtime)
+
+
+def validate(saved_filename):
 
     X_state = tf.placeholder(tf.float32, shape=[None, num_timesteps, num_inputs])
 
@@ -190,39 +233,27 @@ def validate(saved_filename):
     actor_q_values, actor_vars = q_network(X_state, scope='q_networks/actor')
     critic_q_values, critic_vars = q_network(X_state, scope='q_networks/critic')
 
-
-    """
-    # copy operation
-    copy_ops = [actor_var.assign(critic_vars[var_name]) for var_name, actor_var in actor_vars.items()]
-    copy_critic_to_actor = tf.group(*copy_ops)
-    """
-
     X_action = tf.placeholder(tf.int32, shape=[None])
     q_value = tf.reduce_sum(critic_q_values * tf.one_hot(X_action, num_outputs), axis=1, keepdims=True)
 
     # target q value
     y = tf.placeholder(tf.float32, shape=[None, 1])
 
-    """
-    # training operations
-    cost = tf.reduce_mean(tf.square(y - q_value))
-    global_step = tf.Variable(0, trainable=False, name='global_step')
-    optimizer = tf.train.AdamOptimizer(learning_rate)
-    training_op = optimizer.minimize(cost, global_step=global_step)
-    """
-
     init = tf.global_variables_initializer()
     saver = tf.train.Saver()
 
     # initialize observation to 0
-    next_state = np.zeros(num_timesteps)
+    next_state = np.zeros((num_timesteps, num_inputs))
     state = next_state
 
-    num_episodes = 40
+    last_action = -1
+
+    num_episodes = 10000
 
     state_overtime = []
     reward_overtime = []
     action_overtime = []
+    delayed_action_overtime = []
 
     with tf.Session() as sess:
 
@@ -230,28 +261,36 @@ def validate(saved_filename):
         saver = tf.train.Saver()
         saver.restore(sess, "../models/" + saved_filename)
 
-
-        print("loaded!")
-
         # create environment
         env = throttle_env.ThrottleEnv()
 
         for episode in range(num_episodes):
-            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, num_inputs)})
+            q_values = actor_q_values.eval(feed_dict={X_state: state.reshape(-1, num_timesteps, num_inputs)})
             action = np.argmax(q_values)
 
             obs, reward, done = env._step(action)
 
-            state_overtime.append(state)
+            state_action_pair = np.append(obs, last_action)
+            next_state = np.append(state[-(num_timesteps-1):,:], state_action_pair).reshape(num_timesteps, num_inputs)
+
+            last_action = action
+            state = next_state
+
+            #debug
+            state_overtime.append(int(state[-1,0]))
+            delayed_action_overtime.append(int(state[-1,1]))
             action_overtime.append(action)
             reward_overtime.append(reward)
 
-            state = np.append(state, obs)[-num_timesteps:]
 
-        print("state_overtime: " + str(np.array(state_overtime, dtype=int).T[-1].tolist()))
+
+
+        print("state_overtime: " + str(state_overtime))
         print("action_overtime: " + str(action_overtime))
+        print("delayed_action_overtime:" + str(delayed_action_overtime))
         print("reward_overtime: " + str(reward_overtime))
         print("average_reward: " + str(np.average(reward_overtime)))
 
 train()
-#validate("QNN_05-21--15-36")
+#validate("QNN_05-21--22-09")
+

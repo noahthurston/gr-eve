@@ -10,17 +10,19 @@ import throttle_env
 # create environment
 env = throttle_env.ThrottleEnv()
 
+# each input will know be the currently observed state and the last action taken
+
 # variables
 num_inputs = 1
 num_hidden = 16
-num_timesteps = 10
+num_timesteps = 5
 hidden_activation = tf.nn.relu
 num_outputs = 4  # equal to action space
 initializer = tf.contrib.layers.variance_scaling_initializer()
 
 # training
-learning_rate = 0.01
-num_steps = 50*1000
+learning_rate = 0.005
+num_steps = 5*1000
 training_start = 1000
 training_interval = 3
 save_steps = 100
@@ -29,27 +31,30 @@ discount_rate = 0.95
 skip_start = 0
 batch_size = 50
 checkpoint_path = "../models/"
-checkpoint_to_load = "../models/blahblah.ckpt"
+
+test_interval = 500
+test_episodes = 2000
 
 replay_memory_size = 10*1000
 replay_memory = deque([], maxlen=replay_memory_size)
 
 eps_min = 0.01
 eps_max = 1.0
-eps_decay_steps = 50*1000
+eps_decay_steps = 5*1000
+
 
 # epsilon greedy for exploring game
 def epsilon_greedy(q_values, step):
-    epsilon = max(eps_min, eps_max - (eps_max-eps_min) * step/eps_decay_steps)
+    epsilon = max(eps_min, eps_max - (eps_max - eps_min) * step / eps_decay_steps)
     if np.random.rand() < epsilon:
         return np.random.randint(num_outputs)
     else:
         return np.argmax(q_values)
 
+
 # builds NN for predicting q-values based on state
 def q_network(X_state, scope):
     with tf.variable_scope(scope) as scope:
-
         """
         hidden_layer = tf.contrib.layers.fully_connected(X_state, num_hidden, activation_fn=hidden_activation,
                                                          weights_initializer=initializer)
@@ -57,14 +62,14 @@ def q_network(X_state, scope):
                                                     weights_initializer=initializer)
         """
 
-        #RNN: input n-timesteps of state, output 4 q-values)
+        # RNN: input n-timesteps of state, output 4 q-values)
         cell = tf.nn.rnn_cell.LSTMCell(num_hidden, state_is_tuple=True)
         rnn_output, last_state = tf.nn.dynamic_rnn(cell, X_state, dtype=tf.float32)
 
         rnn_output_T = tf.transpose(rnn_output, [1, 0, 2])
         rnn_last_output = tf.gather(rnn_output_T, int(rnn_output_T.get_shape()[0]) - 1)
 
-        #create dense layer before output
+        # create dense layer before output
         weights = tf.Variable(tf.truncated_normal([num_hidden, num_outputs]))
         biases = tf.Variable(tf.constant(0.1, shape=[num_outputs]))
 
@@ -77,6 +82,7 @@ def q_network(X_state, scope):
 
     return outputs, trainable_vars_by_name
 
+
 # sample memories from replay memory
 def sample_memories(batch_size):
     indices = np.random.permutation(len(replay_memory))[:batch_size]
@@ -87,18 +93,20 @@ def sample_memories(batch_size):
         for col, value in zip(cols, memory):
             col.append(value)
     cols = [np.array(col) for col in cols]
-    return(cols[0], cols[1], cols[2].reshape(-1, 1), cols[3], cols[4].reshape(-1, 1))
+    return (cols[0], cols[1], cols[2].reshape(-1, 1), cols[3], cols[4].reshape(-1, 1))
+
+
+
 
 """
 def build_graph():    
-    
+
     return init, train, loss, X_placeholder, y_placeholder, outputs, sentence_loss_pl
 """
 
+
 def train():
-
-
-    #X_state = tf.placeholder(tf.float32, shape=[None, num_inputs])
+    # X_state = tf.placeholder(tf.float32, shape=[None, num_inputs])
     X_state = tf.placeholder(tf.float32, shape=[None, num_timesteps, num_inputs])
 
     # create networks
@@ -125,8 +133,10 @@ def train():
     saver = tf.train.Saver()
 
     # initialize observation to 0
-    next_state = np.zeros(num_timesteps)
+    next_state = np.zeros(num_timesteps)+3
     state = next_state
+
+    avg_reward_overtime = []
 
     with tf.Session() as sess:
         init.run()
@@ -138,13 +148,13 @@ def train():
                 break
             episode += 1
 
-            #print("step: " + str(step))
-            #print("episode: " + str(episode))
+            # print("step: " + str(step))
+            # print("episode: " + str(episode))
 
-            #if done statement... our game never ends
+            # if done statement... our game never ends
 
             # actor decides what to do
-            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, 1)})
+            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, num_inputs)})  #### num_inputs not tested here
             action = epsilon_greedy(q_values, step)
 
             # actor plays
@@ -152,7 +162,8 @@ def train():
             next_state = np.append(next_state, obs)[-num_timesteps:]
 
             # recording for replay memory
-            replay_memory.append((state, action, reward, next_state, 1-done))  # state, action, reward, next_state, continue
+            replay_memory.append(
+                (state, action, reward, next_state, 1 - done))  # state, action, reward, next_state, continue
             state = next_state
 
             # only train critic on training intervals
@@ -160,12 +171,14 @@ def train():
                 continue
 
             X_state_val, X_action_val, rewards, X_next_state_val, continues = (sample_memories(batch_size))
-            next_q_values = actor_q_values.eval(feed_dict={X_state: np.array(X_next_state_val).reshape(-1, num_timesteps, 1)})
+            next_q_values = actor_q_values.eval(
+                feed_dict={X_state: np.array(X_next_state_val).reshape(-1, num_timesteps, num_inputs)})
             max_next_q_values = np.max(next_q_values, axis=1, keepdims=True)
 
             y_val = rewards + continues * discount_rate * max_next_q_values
-            #print(y_val)
-            training_op.run(feed_dict={X_state: np.array(X_state_val).reshape(-1, num_timesteps, 1), X_action: X_action_val, y: y_val})
+            # print(y_val)
+            training_op.run(feed_dict={X_state: np.array(X_state_val).reshape(-1, num_timesteps, num_inputs),
+                                       X_action: X_action_val, y: y_val})
 
             # copy critic to actor
             if step % copy_steps == 0:
@@ -177,17 +190,50 @@ def train():
                 checkpoint_save_name = checkpoint_path + "QNN_" + datetime.datetime.now().strftime("%m-%d--%H-%M")
                 print("STEP #" + str(step) + ": Saving to model to: " + checkpoint_save_name)
                 saver.save(sess, checkpoint_save_name)
-                #saver.save(sess, checkpoint_save_name)
+                # saver.save(sess, checkpoint_save_name)
+
+            if step % test_interval == 0:
+                avg_reward = test_model(actor_q_values, X_state, test_episodes=test_episodes)
+                print("avg_reward: "+ str(avg_reward))
+                avg_reward_overtime.append(avg_reward)
+
+        print("Average reward over time: " + str(avg_reward_overtime))
+        plt.figure(1)
+        plt.plot(np.array(range(len(avg_reward_overtime)))*test_interval, avg_reward_overtime)
+        plt.title("Average Reward vs Training Episode")
+
+        plt.xlabel("Training Episode")
+        plt.ylabel("Average Reward")
+
+        plt.ylim(0,4)
+        plt.grid(True)
+        plt.show()
+
+def test_model(actor_q_values, X_state, test_episodes=10000):
+    reward_overtime = []
+    next_state = np.zeros((num_timesteps, num_inputs))
+    state = next_state
+    last_action = 0
+
+    for episode in range(test_episodes):
+        q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, num_inputs)})
+        action = np.argmax(q_values)
+
+        obs, reward, done = env._step(action)
+
+        state = np.append(state, obs)[-num_timesteps:]
+
+        reward_overtime.append(reward)
+
+    return np.average(reward_overtime)
+
 
 def validate(saved_filename):
-
-
     X_state = tf.placeholder(tf.float32, shape=[None, num_timesteps, num_inputs])
 
     # create networks
     actor_q_values, actor_vars = q_network(X_state, scope='q_networks/actor')
     critic_q_values, critic_vars = q_network(X_state, scope='q_networks/critic')
-
 
     """
     # copy operation
@@ -223,11 +269,9 @@ def validate(saved_filename):
     action_overtime = []
 
     with tf.Session() as sess:
-
         sess.run(init)
         saver = tf.train.Saver()
         saver.restore(sess, "../models/" + saved_filename)
-
 
         print("loaded!")
 
@@ -235,7 +279,7 @@ def validate(saved_filename):
         env = throttle_env.ThrottleEnv()
 
         for episode in range(num_episodes):
-            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, 1)})
+            q_values = actor_q_values.eval(feed_dict={X_state: np.array(state).reshape(-1, num_timesteps, num_inputs)})
             action = np.argmax(q_values)
 
             obs, reward, done = env._step(action)
@@ -251,5 +295,6 @@ def validate(saved_filename):
         print("reward_overtime: " + str(reward_overtime))
         print("average_reward: " + str(np.average(reward_overtime)))
 
-#train()
-validate("QNN_05-21--15-36")
+
+train()
+# validate("QNN_05-21--15-36")
