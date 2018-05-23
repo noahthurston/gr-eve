@@ -1,35 +1,39 @@
+# This agent uses an epsilon greedy algorithm to choose the best jamming power
+
 import numpy as np
 import matplotlib.pyplot as plt
-import gym
+# import gym
 import throttle_env
 import epsilon_greedy
 
-NUM_EPISODES = 10000
+num_episodes = 10000
 
 #create environment
 env = throttle_env.ThrottleEnv()
 
-#def __init__(self, epsilon, num_arms, counts, average_rewards):
+# create epsilon greedy model
 model = epsilon_greedy.epsilon_greedy_model(0.25, 4, np.zeros(4), np.zeros(4))
 
+# lists to hold values for graphing later
 average_rewards_overtime = [[] for x in range(5)]
-counts_overtime = np.zeros((NUM_EPISODES,4))
+counts_overtime = np.zeros((num_episodes,4))
 mod_overtime = []
 
-for episode in range(NUM_EPISODES):
+
+for episode in range(num_episodes):
     curr_arm = model.select_arm()
     ob, reward, episode_over = env._step(curr_arm)
     model.update_model(curr_arm, reward)
 
-
+    # record data for graphing
     for arm in range(model.num_arms):
         average_rewards_overtime[arm].append(model.average_rewards[arm])
     average_rewards_overtime[4] = np.append(average_rewards_overtime[4], model.average_reward_earned)
-
     counts_overtime[episode] = model.counts
-
     mod_overtime = mod_overtime + [ob]
 
+
+# graphing code
 marker_colors = ['r-', 'y-', 'b-', 'g-', 'c-']
 
 plt.figure(0)

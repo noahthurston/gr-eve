@@ -1,5 +1,7 @@
+# This
+
 import numpy as np
-#import gym
+# import gym
 
 mod_to_index = {
     "bpsk": 0,
@@ -22,18 +24,18 @@ mod_to_bps = {
     "16qam": 4
 }
 
-NUM_MODS = 4
+num_mods = 4
+
 
 class ThrottleEnv():
-
     def __init__(self):
-        #np arr to keep track of last 4 success failures (rewarded if 2 of last 4 were failures)
-        self.packet_record = np.zeros(NUM_MODS) + 1
+        # np arr to keep track of last 4 success failures (rewarded if 2 of last 4 were failures)
+        self.packet_record = np.zeros(num_mods) + 1
 
-        #current modulation, basically state
+        # current modulation, basically state
         self.curr_mod_index = 3
 
-        #if packet succeeded, ==1
+        # if packet succeeded, ==1
         self.packet_success = 1
 
     def print(self):
@@ -63,28 +65,28 @@ class ThrottleEnv():
         pass
 
     def _take_action(self, action):
-        #if jamming strength >=, packet fails
+        # if jamming strength >=, packet fails
         if action >= 2:
             self.packet_success = 0
         else:
             self.packet_success = 1
 
-        #update record
+        # update record
         self.packet_record = np.append(self.packet_record[-3:], self.packet_success)
 
-        #check to go up/down modulation
-        #down 1 or 0 gets through
+        # check to go up/down modulation
+        # drop modulation if none of last 4 got through
         if np.sum(self.packet_record) <= 0:
-            #drop modulation
+            # drop modulation
             if self.curr_mod_index != 0: self.curr_mod_index -= 1
-        #up if 3 or 4 get through
+        # up modulation if all of last 4 got through
         elif np.sum(self.packet_record) >=4:
-            #up modulation
+            # up modulation
             if self.curr_mod_index != 3: self.curr_mod_index += 1
 
-
     def _get_reward(self, action):
-        #if packet was jammed, reward=3-jamming strength
+        # if packet was jammed, reward=4-jamming strength
+        # else reward=0
         reward = 0
         if self.curr_mod_index <= 1:
             reward = 4 - action
